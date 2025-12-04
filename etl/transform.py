@@ -44,7 +44,18 @@ def normalize_columns(df):
         'train_name': 'agency_name',
         'endpoints': 'origin_city',
         'route': 'origin_city',
-        'journey': 'origin_city'
+        'journey': 'origin_city',
+        # Ajoutez les noms exacts que vous voyez dans vos fichiers bruts
+        'ville_depart': 'origin_city',    # Exemple
+        'depart_gare': 'origin_city',     # Exemple
+        'departure_station': 'origin_city',
+        
+        'ville_arrivee': 'destination_city',
+        'arrivee_gare': 'destination_city',
+        'arrival_station': 'destination_city',
+        
+        'carrier': 'operator_name',       # Souvent utilisé dans les données européennes
+        'transporteur': 'operator_name',
     }
     
     # 1. Renommage

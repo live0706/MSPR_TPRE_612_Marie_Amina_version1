@@ -1,5 +1,6 @@
 import time
 # Import des modules que nous venons de créer
+from discover import update_sources_file
 from extract import UniversalFetcher
 from transform import run_transform
 from load import run_load
@@ -10,12 +11,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_FILE = os.path.join(BASE_DIR, 'sources.json')
 
 def main():
-    # ...
-    # 1. EXTRACTION
-    print("\n--- STAGE 1 : EXTRACTION ---")
-    # On instancie la classe avec le chemin du fichier config
+    print("🚀 --- PIPELINE ETL OBRAIL DÉMARRÉ ---")
+    time.sleep(3)
+
+    # --- ÉTAPE 0 : MISE À JOUR AUTOMATIQUE DES SOURCES ---
+    print("\n--- ÉTAPE 0 : DÉCOUVERTE DU CATALOGUE EUROPÉEN ---")
+    # Cette fonction va créer/écraser le fichier sources.json
+    update_sources_file()
+
+    # --- ÉTAPE 1 : EXTRACTION ---
+    print("\n--- ÉTAPE 1 : EXTRACTION ---")
+    # L'extracteur lit le fichier sources.json tout neuf
     fetcher = UniversalFetcher(SOURCE_FILE)
-    # On appelle la méthode .run()
     raw_dfs_list = fetcher.run()
     # 2. TRANSFORMATION
     print("\n--- ÉTAPE 2 : TRANSFORMATION ---")
