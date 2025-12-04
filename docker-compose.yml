@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # --- 1. Base de Données ---
+  db:
+    image: postgres:15-alpine
+    container_name: obrail_db
+    restart: always
+    env_file: .env  # Charge tout le fichier
+    environment:
+      # L'image Postgres a besoin des variables séparées pour s'initialiser
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - obrail_net
+    ports:
+      - "5432:5432"
+
+  # --- 2. ETL ---
+  etl:
+    build: ./etl
+    container_name: obrail_etl
+    depends_on:
+      - db
+    env_file: .env # Charge DATABASE_URL automatiquement depuis le .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - obrail_net
+
+  # --- 3. API ---
+  api:
+    build: ./api
+    container_name: obrail_api
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file: .env # Plus besoin de définir environment: DATABASE_URL ici
+    networks:
+      - obrail_net
+
+  # --- 4. Dashboard ---
+  dashboard:
+    build: ./dashboard
+    container_name: obrail_dashboard
+    restart: always
+    ports:
+      - "8501:8501"
+    depends_on:
+      - db
+      - api
+    env_file: .env
+    environment:
+      API_URL: http://api:8000
+    networks:
+      - obrail_net
+
+volumes:
+  postgres_data:
+
+networks:
+  obrail_net:
+    driver: bridge

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "co2_emissions_api",
+    "type": "json",
+    "description": "Données SNCF API (Champs avec prefixe fields.)",
+    "url": "https://ressources.data.sncf.com/api/records/1.0/search/?dataset=emission-co2-perimetre-complet&rows=50"
+  },
+  {
+    "id": "night_trains_wiki",
+    "type": "html",
+    "description": "Wikipedia Named Trains (Tableau avec colonne 'Endpoints')",
+    "url": "https://en.wikipedia.org/wiki/List_of_named_passenger_trains_of_Europe"
+  }
+]
