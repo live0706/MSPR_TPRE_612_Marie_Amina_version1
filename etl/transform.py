@@ -3,6 +3,7 @@ import numpy as np
 import logging
 import uuid
 import re
+from datetime import datetime
 
 # --- CONFIGURATION LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,10 +36,20 @@ def normalize_columns(df):
         'agency_name': 'operator_name', 'network': 'operator_name', 'operator': 'operator_name',
         'origine': 'origin_city', 'from': 'origin_city', 'origin': 'origin_city',
         'destination': 'destination_city', 'to': 'destination_city',
-        'departure_date_time': 'departure_time', 'departure': 'departure_time',
-        'arrival_date_time': 'arrival_time', 'arrival': 'arrival_time',
+        'departure_date_time': 'departure_time', 'departure': 'departure_time', 'departure_time': 'departure_time',
+        'heure_depart': 'departure_time', 'heure_departure': 'departure_time',
+        'arrival_date_time': 'arrival_time', 'arrival': 'arrival_time', 'arrival_time': 'arrival_time',
+        'heure_arrivee': 'arrival_time', 'heure_arrival': 'arrival_time',
         'commercial_mode': 'train_type',
-        'emission_co2_kg': 'co2_emissions', 'distance': 'distance_km',
+        'emission_co2_kg': 'co2_emissions', 'emissions_co2e': 'co2_emissions',
+        'distance': 'distance_km',
+
+        # Back-on-Track (Open Night Train DB)
+        'trip_origin': 'origin_city',
+        'trip_headsign': 'destination_city',
+        'origin_departure_time': 'departure_time',
+        'destination_arrival_time': 'arrival_time',
+        'agency_id': 'operator_name',
 
         # Wikipédia
         'train_name': 'agency_name',
@@ -76,6 +87,9 @@ def clean_and_enrich(df):
     """
     Applique la logique métier.
     """
+    # Normalise common empty markers
+    df = df.replace({"#N/A": None, "N/A": None, "": None})
+
     # --- A. SPECIAL WIKIPEDIA : Découpage "Origin – Destination" ---
     def split_endpoints(row):
         origin = str(row['origin_city'])
@@ -95,8 +109,23 @@ def clean_and_enrich(df):
     df[['origin_city', 'destination_city']] = df.apply(split_endpoints, axis=1)
 
     # --- B. Nettoyage Dates & Distances ---
-    df['departure_time'] = pd.to_datetime(df['departure_time'], errors='coerce')
-    df['arrival_time'] = pd.to_datetime(df['arrival_time'], errors='coerce')
+    base_date = datetime(2000, 1, 1)
+
+    def parse_datetime(value):
+        if pd.isna(value):
+            return pd.NaT
+        if isinstance(value, str):
+            # Handle time-only values like HH:MM or HH:MM:SS
+            if re.match(r"^\d{1,2}:\d{2}(:\d{2})?$", value.strip()):
+                parts = value.strip().split(":")
+                h = int(parts[0]) % 24
+                m = int(parts[1])
+                s = int(parts[2]) if len(parts) == 3 else 0
+                return base_date.replace(hour=h, minute=m, second=s)
+        return pd.to_datetime(value, errors='coerce')
+
+    df['departure_time'] = df['departure_time'].apply(parse_datetime)
+    df['arrival_time'] = df['arrival_time'].apply(parse_datetime)
 
     def clean_dist(val):
         if pd.isna(val): return None
@@ -107,10 +136,49 @@ def clean_and_enrich(df):
         return None
     df['distance_km'] = df['distance_km'].apply(clean_dist)
 
-    # --- C. Classification Jour / Nuit ---
+    # --- C. Imputation des heures manquantes ---
+
+    def estimate_duration_hours(distance_km, service_type, train_type):
+        speed = 120.0
+        stype = str(service_type).lower() if pd.notna(service_type) else ""
+        ttype = str(train_type).lower() if pd.notna(train_type) else ""
+        if stype in ["nuit", "night"]:
+            speed = 100.0
+        if "tgv" in ttype or "high" in ttype:
+            speed = 200.0
+        if distance_km and distance_km > 0:
+            return distance_km / speed
+        return 2.0 if stype == "jour" else 6.0
+
+    def default_departure_time(service_type):
+        stype = str(service_type).lower() if pd.notna(service_type) else "jour"
+        if stype in ["nuit", "night"]:
+            return base_date.replace(hour=23, minute=0, second=0)
+        return base_date.replace(hour=9, minute=0, second=0)
+
+    def fill_times(row):
+        dep = row['departure_time']
+        arr = row['arrival_time']
+        stype = row['service_type'] if pd.notna(row['service_type']) else "Jour"
+        duration_hours = estimate_duration_hours(row['distance_km'], stype, row['train_type'])
+        duration = pd.Timedelta(hours=duration_hours)
+
+        if pd.isna(dep) and pd.isna(arr):
+            dep = default_departure_time(stype)
+            arr = dep + duration
+        elif pd.isna(dep) and pd.notna(arr):
+            dep = arr - duration
+        elif pd.notna(dep) and pd.isna(arr):
+            arr = dep + duration
+
+        return pd.Series([dep, arr])
+
+    df[['departure_time', 'arrival_time']] = df.apply(fill_times, axis=1)
+
+    # --- D. Classification Jour / Nuit ---
     def classify_service(row):
-        if pd.notna(row['service_type']) and str(row['service_type']).lower() in ['nuit', 'night']:
-            return 'Nuit'
+        if pd.notna(row['service_type']) and str(row['service_type']).lower() in ['nuit', 'night', 'jour', 'day']:
+            return 'Nuit' if str(row['service_type']).lower() in ['nuit', 'night'] else 'Jour'
         if pd.notna(row['departure_time']):
             hour = row['departure_time'].hour
             if hour >= 22 or hour <= 6:
@@ -119,7 +187,11 @@ def clean_and_enrich(df):
 
     df['service_type'] = df.apply(classify_service, axis=1)
 
-    # --- D. Calcul CO2 ---
+    # --- E. Default train type for rail-only datasets ---
+    if "train_type" in df.columns:
+        df["train_type"] = df["train_type"].fillna("Rail")
+
+    # --- F. Calcul CO2 ---
     def calculate_co2(row):
         if pd.notna(row['co2_emissions']):
             try: return float(row['co2_emissions'])
@@ -130,7 +202,10 @@ def clean_and_enrich(df):
 
     df['co2_emissions'] = df.apply(calculate_co2, axis=1)
 
-    # --- E. ID Unique ---
+    # Exclure les lignes sans distance_km
+    df = df.dropna(subset=['distance_km'])
+
+    # --- F. ID Unique ---
     def generate_id(row):
         if pd.notna(row['trip_id']): return str(row['trip_id'])
         return f"AUTO-{uuid.uuid4().hex[:8]}"

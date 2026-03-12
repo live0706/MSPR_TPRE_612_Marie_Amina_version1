@@ -70,7 +70,9 @@ def run_load(data, table_name='trips'):
 # --- LOCAL TEST ---
 if __name__ == "__main__":
     # Test loading from the processed file locally
-    processed_path = "../data/processed/trips_cleaned_final.csv"
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.getenv("DATA_DIR") or os.path.abspath(os.path.join(base_dir, "..", "data"))
+    processed_path = os.path.join(data_dir, "processed", "trips_cleaned_final.csv")
     if os.path.exists(processed_path):
         run_load(processed_path)
     else:

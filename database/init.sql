@@ -11,9 +11,9 @@ CREATE TABLE trips (
     origin_city VARCHAR(100) NOT NULL,
     destination_city VARCHAR(100) NOT NULL,
     
-    departure_time TIMESTAMP,
-    arrival_time TIMESTAMP,
-    
+    departure_time TIMESTAMP NOT NULL,
+    arrival_time TIMESTAMP NOT NULL,
+
     -- Contrainte IMPORTANTE : Seules les valeurs 'Jour' ou 'Nuit' sont acceptées
     service_type VARCHAR(10) CHECK (service_type IN ('Jour', 'Nuit')),
     

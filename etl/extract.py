@@ -3,19 +3,22 @@ import requests
 import os
 import json
 import logging
-from bs4 import BeautifulSoup
 from datetime import datetime
-from io import StringIO  # Nécessaire pour corriger le FutureWarning
+from io import StringIO  # NÃ©cessaire pour corriger le FutureWarning
+
+from gtfs import parse_gtfs_zip
 
 # --- CONFIGURATION ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_RAW_DIR = os.path.join(BASE_DIR, '../data/raw')
+DATA_DIR = os.getenv("DATA_DIR") or os.path.abspath(os.path.join(BASE_DIR, "..", "data"))
+DATA_RAW_DIR = os.path.join(DATA_DIR, "raw")
 SOURCE_FILE = os.path.join(BASE_DIR, 'sources.json')
 
 os.makedirs(DATA_RAW_DIR, exist_ok=True)
+
 
 class UniversalFetcher:
     def __init__(self, config_path):
@@ -23,24 +26,25 @@ class UniversalFetcher:
 
     def load_config(self):
         if not os.path.exists(self.config_path):
-            logger.error(f"❌ Config file not found: {self.config_path}")
+            logger.error(f"âŒ Config file not found: {self.config_path}")
             return []
         with open(self.config_path, 'r') as f:
             return json.load(f)
 
     def download_resource(self, url, source_id, file_type):
         timestamp = datetime.now().strftime('%Y%m%d')
-        filename = f"{source_id}_{timestamp}.{file_type}"
+        ext = "zip" if file_type == "gtfs" else file_type
+        filename = f"{source_id}_{timestamp}.{ext}"
         file_path = os.path.join(DATA_RAW_DIR, filename)
         
-        # Si le fichier existe déjà, on ne le re-télécharge pas (gain de temps pour les tests)
+        # Si le fichier existe dÃ©jÃ , on ne le re-tÃ©lÃ©charge pas (gain de temps pour les tests)
         if os.path.exists(file_path):
-            logger.info(f"📂 File already exists, skipping download: {filename}")
+            logger.info(f"ðŸ“‚ File already exists, skipping download: {filename}")
             return file_path
 
         try:
-            logger.info(f"⬇️ Downloading: {source_id} from {url}...")
-            # On ajoute un User-Agent pour ne pas être bloqué par Wikipédia
+            logger.info(f"â¬‡ï¸ Downloading: {source_id} from {url}...")
+            # On ajoute un User-Agent pour ne pas Ãªtre bloquÃ© par WikipÃ©dia
             headers = {'User-Agent': 'Mozilla/5.0 (ObRail Project)'}
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
@@ -48,14 +52,15 @@ class UniversalFetcher:
             with open(file_path, 'wb') as f:
                 f.write(response.content)
             
-            logger.info(f"✅ Saved to: {filename}")
+            logger.info(f"âœ… Saved to: {filename}")
             return file_path
         except Exception as e:
-            logger.error(f"⚠️ Failed to download {source_id}: {e}")
+            logger.error(f"âš ï¸ Failed to download {source_id}: {e}")
             return None
 
     def parse_content(self, file_path, file_type, separator=','):
-        if not file_path: return pd.DataFrame()
+        if not file_path:
+            return pd.DataFrame()
 
         try:
             # 1. Handle CSV (Fix DtypeWarning)
@@ -75,7 +80,7 @@ class UniversalFetcher:
                         return pd.json_normalize(data[key])
                 return pd.json_normalize(data)
 
-            # 3. Handle HTML (Mise à jour pour Wikipédia "Named Trains")
+            # 3. Handle HTML (Mise Ã  jour pour WikipÃ©dia "Named Trains")
             elif file_type == 'html':
                 with open(file_path, 'r', encoding='utf-8') as f:
                     html_content = f.read()
@@ -90,31 +95,38 @@ class UniversalFetcher:
                     df.columns = [c.lower().replace(' ', '_') for c in df.columns]
                     
                     # Mapping pour aider transform.py
-                    # La colonne "endpoints" contient "Paris – Nice"
-                    # On la renomme en 'origin_city' pour qu'elle soit capturée,
+                    # La colonne "endpoints" contient "Paris â€“ Nice"
+                    # On la renomme en 'origin_city' pour qu'elle soit capturÃ©e,
                     # le split se fera dans transform.py
                     rename_map = {}
                     for col in df.columns:
-                        if 'train' in col: rename_map[col] = 'agency_name'
-                        if 'endpoints' in col: rename_map[col] = 'origin_city' # Astuce temporaire
-                        if 'operator' in col: rename_map[col] = 'operator_name'
+                        if 'train' in col:
+                            rename_map[col] = 'agency_name'
+                        if 'endpoints' in col:
+                            rename_map[col] = 'origin_city'  # Astuce temporaire
+                        if 'operator' in col:
+                            rename_map[col] = 'operator_name'
                     
                     df = df.rename(columns=rename_map)
-                    df['service_type'] = 'Nuit' # Hypothèse par défaut pour l'exercice
+                    df['service_type'] = 'Nuit'  # HypothÃ¨se par dÃ©faut pour l'exercice
                     return df
                 else:
                     logger.warning(f"No tables found in {file_path}")
                     return pd.DataFrame()
 
+            # 4. Handle GTFS (ZIP)
+            elif file_type == 'gtfs':
+                return parse_gtfs_zip(file_path)
+
         except Exception as e:
-            logger.error(f"❌ Error parsing {file_path}: {e}")
+            logger.error(f"âŒ Error parsing {file_path}: {e}")
             return pd.DataFrame()
 
     def run(self):
         sources = self.load_config()
         extracted_data = []
 
-        logger.info(f"🚀 Starting Extraction for {len(sources)} sources...")
+        logger.info(f"ðŸš€ Starting Extraction for {len(sources)} sources...")
 
         for source in sources:
             src_url = source.get('url')
@@ -128,11 +140,12 @@ class UniversalFetcher:
             if not df.empty:
                 df['source_origin'] = src_id
                 extracted_data.append(df)
-                logger.info(f"📊 {src_id}: {len(df)} rows extracted.")
+                logger.info(f"ðŸ“Š {src_id}: {len(df)} rows extracted.")
             else:
-                logger.warning(f"⚠️ {src_id}: Empty or unreadable.")
+                logger.warning(f"âš ï¸ {src_id}: Empty or unreadable.")
 
         return extracted_data
+
 
 if __name__ == "__main__":
     fetcher = UniversalFetcher(SOURCE_FILE)

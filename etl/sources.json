@@ -1,0 +1,15 @@
+[
+  {
+    "id": "wiki_named_trains",
+    "type": "html",
+    "description": "Wikipedia Named Passenger Trains",
+    "url": "https://en.wikipedia.org/wiki/List_of_named_passenger_trains_of_Europe"
+  },
+  {
+    "id": "back_on_track_trip_export",
+    "type": "csv",
+    "description": "Back-on-Track Open Night Train DB (view_trip_export)",
+    "url": "https://docs.google.com/spreadsheets/d/15zsK-lBuibUtZ1s2FxVHvAmSu-pEuE0NDT6CAMYL2TY/gviz/tq?tqx=out:csv&sheet=view_trip_export",
+    "enabled": true
+  }
+]

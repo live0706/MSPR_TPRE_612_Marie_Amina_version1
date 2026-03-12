@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-03-12T14:46:25.049407Z",
+  "total_rows": 352,
+  "duplicate_trip_ids": 0,
+  "missing_by_column": {
+    "trip_id": 0,
+    "operator_name": 0,
+    "origin_city": 0,
+    "destination_city": 0,
+    "departure_time": 0,
+    "arrival_time": 0,
+    "service_type": 0,
+    "train_type": 0,
+    "co2_emissions": 0,
+    "distance_km": 0,
+    "source_origin": 0
+  },
+  "missing_rate_by_column": {
+    "trip_id": 0.0,
+    "operator_name": 0.0,
+    "origin_city": 0.0,
+    "destination_city": 0.0,
+    "departure_time": 0.0,
+    "arrival_time": 0.0,
+    "service_type": 0.0,
+    "train_type": 0.0,
+    "co2_emissions": 0.0,
+    "distance_km": 0.0,
+    "source_origin": 0.0
+  },
+  "service_type_counts": {
+    "Jour": 290,
+    "Nuit": 62
+  },
+  "co2_zero_or_missing": 0
+}

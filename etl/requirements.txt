@@ -4,4 +4,5 @@ beautifulsoup4
 sqlalchemy
 psycopg2-binary
 lxml
-html5lib
+html5lib  
+numpy

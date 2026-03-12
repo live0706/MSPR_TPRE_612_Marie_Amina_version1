@@ -1,0 +1,23 @@
+[
+  {
+    "id": "gtfs_tanlib",
+    "type": "gtfs",
+    "description": "GTFS (a remplacer par un feed rail/ferroviaire)",
+    "url": "https://static.data.gouv.fr/resources/donnees-gtfs/20240705-132033/gtfs-20240702-181210-tan.zip",
+    "enabled": false
+  },
+  {
+    "id": "back_on_track_trip_export",
+    "type": "csv",
+    "description": "Back-on-Track Open Night Train DB (view_trip_export)",
+    "url": "https://docs.google.com/spreadsheets/d/15zsK-lBuibUtZ1s2FxVHvAmSu-pEuE0NDT6CAMYL2TY/gviz/tq?tqx=out:csv&sheet=view_trip_export",
+    "enabled": true
+  },
+  {
+    "id": "back_on_track_list",
+    "type": "csv",
+    "description": "Back-on-Track Open Night Train DB (view_ontd_list)",
+    "url": "https://docs.google.com/spreadsheets/d/15zsK-lBuibUtZ1s2FxVHvAmSu-pEuE0NDT6CAMYL2TY/gviz/tq?tqx=out:csv&sheet=view_ontd_list",
+    "enabled": false
+  }
+]

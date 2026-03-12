@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-03-12T14:46:25.066728Z",
+  "model": "linear_regression_numpy",
+  "features": [
+    "distance_km"
+  ],
+  "target": "co2_emissions",
+  "coefficients": {
+    "a": 0.012101550113570708,
+    "b": 2.5733488257808808
+  },
+  "metrics": {
+    "mae": 5.440216908193628,
+    "rmse": 6.4318202670370574,
+    "r2": 0.1855330585571855
+  },
+  "data_points": 352
+}
