@@ -1,0 +1,40 @@
+À l’issue de la mission, ObRail Europe attend de l’équipe projet la remise d’un ensemble de livrables
+structurés, documentés et exploitables. Ces livrables constitueront à la fois la preuve du travail réalisé et la
+base opérationnelle pour les phases ultérieures du projet (exploitation par les data scientists,
+développement de modèles d’IA et mise en production d’applications).
+1. Scripts ETL opérationnels
+L’équipe devra produire un ensemble de scripts permettant l’automatisation du processus de collecte, de
+transformation et de chargement des données. Ces scripts devront être documentés, paramétrables et
+reproductibles, afin de pouvoir être rejoués régulièrement pour mettre à jour l’entrepôt de données.
+2. Modèle conceptuel et physique des données
+Un modèle conceptuel de données (MCD) et un modèle physique de données (MPD) devront être
+élaborés et fournis. Ils devront être accompagnés d’une justification des choix effectués (entités retenues,
+relations définies, contraintes d’intégrité). Ces modèles serviront de référence pour les évolutions futures
+de la base de données.
+3. Base de données relationnelle alimentée
+L’équipe projet devra livrer une base de données relationnelle opérationnelle (PostgreSQL ou équivalent),
+préremplie avec un jeu de données harmonisé issu du processus ETL. Cette base devra être exploitable
+immédiatement par les équipes de ObRail Europe.
+4. API REST fonctionnelle
+Une API REST devra être développée afin de mettre à disposition les données collectées et transformées.
+L’API devra comporter au minimum des endpoints de consultation permettant d’interroger les dessertes
+ferroviaires selon différents critères (ex. : ville de départ, ville d’arrivée, type de train). Une documentation
+technique claire, incluant des exemples de requêtes, devra être fournie pour garantir la prise en main par
+des utilisateurs tiers.
+5. Documentation technique complète
+Un rapport technique devra être remis. Il devra détailler :
+les sources de données retenues et leur justification,
+les choix techniques opérés (langages, librairies, frameworks),
+les étapes du processus ETL (collecte, nettoyage, transformation, stockage),
+le schéma de la base de données,
+les spécifications et tests réalisés sur l’API,
+les éventuelles limites identifiées et les pistes d’amélioration.
+6. Tableau de bord de contrôle
+ObRail Europe souhaite disposer d’un tableau de bord simple permettant de visualiser la complétude des
+données (répartition des trajets jour/nuit, volume de données collectées par opérateur, taux de valeurs
+manquantes, etc.). Ce tableau de bord devra être accessible à tout public.
+7. Support de soutenance
+En complément des livrables techniques, l’équipe projet devra préparer un support de présentation
+destiné à la soutenance finale devant le client (public technique). Ce support devra synthétiser les
+principaux éléments du travail réalisé : démarche suivie, difficultés rencontrées, solutions mises en place,
+résultats obtenus et perspectives.
