@@ -1,10 +1,11 @@
-import pandas as pd
+﻿import pandas as pd
 import requests
 import os
 import json
 import logging
+import zipfile
 from datetime import datetime
-from io import StringIO  # NÃ©cessaire pour corriger le FutureWarning
+from io import StringIO  # NÃƒÂ©cessaire pour corriger le FutureWarning
 
 from gtfs import parse_gtfs_zip
 
@@ -26,7 +27,7 @@ class UniversalFetcher:
 
     def load_config(self):
         if not os.path.exists(self.config_path):
-            logger.error(f"âŒ Config file not found: {self.config_path}")
+            logger.error(f"Ã¢ÂÅ’ Config file not found: {self.config_path}")
             return []
         with open(self.config_path, 'r') as f:
             return json.load(f)
@@ -37,20 +38,36 @@ class UniversalFetcher:
         filename = f"{source_id}_{timestamp}.{ext}"
         file_path = os.path.join(DATA_RAW_DIR, filename)
         
-        # Si le fichier existe dÃ©jÃ , on ne le re-tÃ©lÃ©charge pas (gain de temps pour les tests)
+        # Si le fichier existe dÃƒÂ©jÃƒÂ , on ne le re-tÃƒÂ©lÃƒÂ©charge pas (gain de temps pour les tests)
         if os.path.exists(file_path):
-            logger.info(f"ðŸ“‚ File already exists, skipping download: {filename}")
-            return file_path
+            if file_type == "gtfs" and not zipfile.is_zipfile(file_path):
+                logger.warning(f"GTFS file not a valid zip on disk, re-downloading: {filename}")
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+            else:
+                logger.info(f"ðŸ“‚ File already exists, skipping download: {filename}")
+                return file_path
 
         try:
             logger.info(f"â¬‡ï¸ Downloading: {source_id} from {url}...")
-            # On ajoute un User-Agent pour ne pas Ãªtre bloquÃ© par WikipÃ©dia
+            # On ajoute un User-Agent pour ne pas ÃƒÂªtre bloquÃƒÂ© par WikipÃƒÂ©dia
             headers = {'User-Agent': 'Mozilla/5.0 (ObRail Project)'}
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             
             with open(file_path, 'wb') as f:
                 f.write(response.content)
+
+            # Validate GTFS zip integrity to avoid GTFS-RT or non-zip files
+            if file_type == "gtfs" and not zipfile.is_zipfile(file_path):
+                logger.warning(f"GTFS file is not a valid zip: {filename}")
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+                return None
             
             logger.info(f"âœ… Saved to: {filename}")
             return file_path
@@ -80,7 +97,7 @@ class UniversalFetcher:
                         return pd.json_normalize(data[key])
                 return pd.json_normalize(data)
 
-            # 3. Handle HTML (Mise Ã  jour pour WikipÃ©dia "Named Trains")
+            # 3. Handle HTML (Mise ÃƒÂ  jour pour WikipÃƒÂ©dia "Named Trains")
             elif file_type == 'html':
                 with open(file_path, 'r', encoding='utf-8') as f:
                     html_content = f.read()
@@ -95,8 +112,8 @@ class UniversalFetcher:
                     df.columns = [c.lower().replace(' ', '_') for c in df.columns]
                     
                     # Mapping pour aider transform.py
-                    # La colonne "endpoints" contient "Paris â€“ Nice"
-                    # On la renomme en 'origin_city' pour qu'elle soit capturÃ©e,
+                    # La colonne "endpoints" contient "Paris Ã¢â‚¬â€œ Nice"
+                    # On la renomme en 'origin_city' pour qu'elle soit capturÃƒÂ©e,
                     # le split se fera dans transform.py
                     rename_map = {}
                     for col in df.columns:
@@ -108,7 +125,7 @@ class UniversalFetcher:
                             rename_map[col] = 'operator_name'
                     
                     df = df.rename(columns=rename_map)
-                    df['service_type'] = 'Nuit'  # HypothÃ¨se par dÃ©faut pour l'exercice
+                    df['service_type'] = 'Nuit'  # HypothÃƒÂ¨se par dÃƒÂ©faut pour l'exercice
                     return df
                 else:
                     logger.warning(f"No tables found in {file_path}")
@@ -116,10 +133,13 @@ class UniversalFetcher:
 
             # 4. Handle GTFS (ZIP)
             elif file_type == 'gtfs':
+                if not zipfile.is_zipfile(file_path):
+                    logger.warning(f"GTFS file not a zip: {file_path}")
+                    return pd.DataFrame()
                 return parse_gtfs_zip(file_path)
 
         except Exception as e:
-            logger.error(f"âŒ Error parsing {file_path}: {e}")
+            logger.error(f"Ã¢ÂÅ’ Error parsing {file_path}: {e}")
             return pd.DataFrame()
 
     def run(self):
@@ -129,6 +149,9 @@ class UniversalFetcher:
         logger.info(f"ðŸš€ Starting Extraction for {len(sources)} sources...")
 
         for source in sources:
+            if source.get("enabled", True) is False:
+                logger.info(f"Skipping disabled source: {source.get('id')}")
+                continue
             src_url = source.get('url')
             src_type = source.get('type')
             src_id = source.get('id', 'unknown')

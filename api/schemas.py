@@ -13,6 +13,8 @@ class TrainSchema(BaseModel):
     departure_time: Optional[str] = None
     arrival_time: Optional[str] = None
     service_type: Optional[str] = None
+    train_type: Optional[str] = None
+    distance_km: Optional[float] = None
     co2_emissions: Optional[float] = 0.0
 
     class Config:

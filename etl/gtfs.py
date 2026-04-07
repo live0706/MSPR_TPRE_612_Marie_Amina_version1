@@ -66,15 +66,26 @@ def parse_gtfs_zip(file_path):
         first_stop = stop_times.groupby("trip_id").first().reset_index()
         last_stop = stop_times.groupby("trip_id").last().reset_index()
 
-        stops_map = {}
-        if not stops.empty and "stop_id" in stops.columns and "stop_name" in stops.columns:
-            stops_map = dict(zip(stops["stop_id"], stops["stop_name"]))
+        stops_map_name = {}
+        stops_map_lat = {}
+        stops_map_lon = {}
+        if not stops.empty and "stop_id" in stops.columns:
+            if "stop_name" in stops.columns:
+                stops_map_name = dict(zip(stops["stop_id"], stops["stop_name"]))
+            if "stop_lat" in stops.columns:
+                stops_map_lat = dict(zip(stops["stop_id"], stops["stop_lat"]))
+            if "stop_lon" in stops.columns:
+                stops_map_lon = dict(zip(stops["stop_id"], stops["stop_lon"]))
 
         df = pd.DataFrame(
             {
                 "trip_id": first_stop["trip_id"],
-                "origin_city": first_stop["stop_id"].map(stops_map),
-                "destination_city": last_stop["stop_id"].map(stops_map),
+                "origin_city": first_stop["stop_id"].map(stops_map_name),
+                "destination_city": last_stop["stop_id"].map(stops_map_name),
+                "origin_lat": first_stop["stop_id"].map(stops_map_lat),
+                "origin_lon": first_stop["stop_id"].map(stops_map_lon),
+                "destination_lat": last_stop["stop_id"].map(stops_map_lat),
+                "destination_lon": last_stop["stop_id"].map(stops_map_lon),
                 "departure_time": first_stop["departure_time"].apply(lambda v: _gtfs_time_to_datetime(v, base_date)),
                 "arrival_time": last_stop["arrival_time"].apply(lambda v: _gtfs_time_to_datetime(v, base_date)),
             }

@@ -12,8 +12,9 @@ logger = logging.getLogger()
 # Liste officielle des colonnes attendues en base de données
 OFFICIAL_COLUMNS = [
     'trip_id', 'operator_name', 'origin_city', 'destination_city',
-    'departure_time', 'arrival_time', 'service_type', 
-    'train_type', 'co2_emissions', 'distance_km', 'source_origin'
+    'departure_time', 'arrival_time', 'service_type',
+    'train_type', 'co2_emissions', 'distance_km', 'source_origin',
+    'origin_lat', 'origin_lon', 'destination_lat', 'destination_lon'
 ]
 
 def normalize_columns(df):
@@ -67,6 +68,14 @@ def normalize_columns(df):
         
         'carrier': 'operator_name',       # Souvent utilisé dans les données européennes
         'transporteur': 'operator_name',
+
+        # Coordonnées (GTFS ou autres)
+        'origin_lat': 'origin_lat',
+        'origin_lon': 'origin_lon',
+        'destination_lat': 'destination_lat',
+        'destination_lon': 'destination_lon',
+        'stop_lat': 'origin_lat',
+        'stop_lon': 'origin_lon',
     }
     
     # 1. Renommage
@@ -88,7 +97,7 @@ def clean_and_enrich(df):
     Applique la logique métier.
     """
     # Normalise common empty markers
-    df = df.replace({"#N/A": None, "N/A": None, "": None})
+    df = df.replace({"#N/A": None, "N/A": None, "": None, "None": None, "nan": None})
 
     # --- A. SPECIAL WIKIPEDIA : Découpage "Origin – Destination" ---
     def split_endpoints(row):
@@ -191,6 +200,10 @@ def clean_and_enrich(df):
     if "train_type" in df.columns:
         df["train_type"] = df["train_type"].fillna("Rail")
 
+    # --- E2. Default operator name ---
+    if "operator_name" in df.columns:
+        df["operator_name"] = df["operator_name"].fillna("Unknown")
+
     # --- F. Calcul CO2 ---
     def calculate_co2(row):
         if pd.notna(row['co2_emissions']):
@@ -202,13 +215,14 @@ def clean_and_enrich(df):
 
     df['co2_emissions'] = df.apply(calculate_co2, axis=1)
 
-    # Exclure les lignes sans distance_km
-    df = df.dropna(subset=['distance_km'])
+    # On garde les lignes sans distance_km pour ne pas perdre du volume (CO2 sera estimé à 0)
 
     # --- F. ID Unique ---
     def generate_id(row):
-        if pd.notna(row['trip_id']): return str(row['trip_id'])
-        return f"AUTO-{uuid.uuid4().hex[:8]}"
+        src = row.get('source_origin') or "unknown"
+        if pd.notna(row['trip_id']):
+            return f"{src}:{row['trip_id']}"
+        return f"{src}:AUTO-{uuid.uuid4().hex[:8]}"
     df['trip_id'] = df.apply(generate_id, axis=1)
 
     # Nettoyage final des lignes vides

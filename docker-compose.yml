@@ -27,6 +27,11 @@ services:
     env_file: .env # Charge DATABASE_URL automatiquement depuis le .env
     environment:
       DATA_DIR: /app/data
+      PAN_MAX_FEEDS: 50
+      PAN_ONLY_GTFS: "true"
+      PAN_ONLY_RAIL: "true"
+      RESET_DB: "true"
+      TRANSITLAND_ENABLED: "false"
     volumes:
       - ./data:/app/data
     networks:

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-12T14:46:25.049407Z",
-  "total_rows": 352,
+  "generated_at": "2026-04-07T10:27:34.143686Z",
+  "total_rows": 181291,
   "duplicate_trip_ids": 0,
   "missing_by_column": {
     "trip_id": 0,
@@ -12,8 +12,12 @@
     "service_type": 0,
     "train_type": 0,
     "co2_emissions": 0,
-    "distance_km": 0,
-    "source_origin": 0
+    "distance_km": 180942,
+    "source_origin": 0,
+    "origin_lat": 415,
+    "origin_lon": 415,
+    "destination_lat": 415,
+    "destination_lon": 415
   },
   "missing_rate_by_column": {
     "trip_id": 0.0,
@@ -25,12 +29,16 @@
     "service_type": 0.0,
     "train_type": 0.0,
     "co2_emissions": 0.0,
-    "distance_km": 0.0,
-    "source_origin": 0.0
+    "distance_km": 0.9981,
+    "source_origin": 0.0,
+    "origin_lat": 0.0023,
+    "origin_lon": 0.0023,
+    "destination_lat": 0.0023,
+    "destination_lon": 0.0023
   },
   "service_type_counts": {
-    "Jour": 290,
-    "Nuit": 62
+    "Jour": 154906,
+    "Nuit": 26385
   },
-  "co2_zero_or_missing": 0
+  "co2_zero_or_missing": 180942
 }

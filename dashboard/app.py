@@ -16,7 +16,24 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 def load_data():
     try:
         engine = create_engine(DATABASE_URL)
-        query = "SELECT * FROM trips"
+        query = """
+            SELECT
+                t.trip_id,
+                o.name AS operator_name,
+                so.name AS origin_city,
+                sd.name AS destination_city,
+                t.departure_time,
+                t.arrival_time,
+                t.service_type,
+                t.train_type,
+                r.distance_km,
+                t.co2_emissions
+            FROM trips t
+            LEFT JOIN routes r ON t.route_id = r.route_id
+            LEFT JOIN operators o ON r.operator_id = o.operator_id
+            LEFT JOIN stations so ON r.origin_station_id = so.station_id
+            LEFT JOIN stations sd ON r.destination_station_id = sd.station_id
+        """
         with engine.connect() as conn:
             df = pd.read_sql(query, conn)
         return df

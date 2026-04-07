@@ -47,7 +47,7 @@ def main():
 
     # 3. CHARGEMENT
     print("\n--- ETAPE 3 : CHARGEMENT (LOAD) ---")
-    run_load(clean_df, table_name='trips')
+    run_load(clean_df)
     
     print("\nPIPELINE TERMINE AVEC SUCCES")
 

@@ -22,25 +22,39 @@ def get_trains(
         raise HTTPException(status_code=500, detail="Base de données non connectée.")
 
     try:
-        query = "SELECT * FROM trips"
+        base_query = """
+            SELECT
+                t.trip_id,
+                o.name AS operator_name,
+                so.name AS origin_city,
+                sd.name AS destination_city,
+                t.departure_time,
+                t.arrival_time,
+                t.service_type,
+                t.train_type,
+                r.distance_km,
+                t.co2_emissions
+            FROM trips t
+            LEFT JOIN routes r ON t.route_id = r.route_id
+            LEFT JOIN operators o ON r.operator_id = o.operator_id
+            LEFT JOIN stations so ON r.origin_station_id = so.station_id
+            LEFT JOIN stations sd ON r.destination_station_id = sd.station_id
+        """
         params = {}
-        
-        # Filtre dynamique
+
         if service_type:
-            query += " WHERE service_type = :service_type"
-            params['service_type'] = service_type
-            
-        # Pagination
-        query += " LIMIT :limit OFFSET :offset"
-        params['limit'] = limit
-        params['offset'] = offset
+            base_query += " WHERE t.service_type = :service_type"
+            params["service_type"] = service_type
+
+        base_query += " LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
 
         with engine.connect() as conn:
-            result = conn.execute(text(query), params)
-            # Conversion en dictionnaires pour Pydantic
+            result = conn.execute(text(base_query), params)
             rows = result.mappings().all()
             return rows
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur SQL: {str(e)}")
 
