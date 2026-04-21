@@ -14,8 +14,13 @@ try:
         logger.warning("⚠️ DATABASE_URL non définie, l'API risque de ne pas fonctionner.")
         engine = None
     else:
-        engine = create_engine(DATABASE_URL)
-        logger.info("✅ Connecteur BDD initialisé.")
+        # Optimisation : timeout de 10s et vérification de connexion active
+        engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 10}
+        )
+        logger.info("✅ Connecteur BDD initialisé avec succès.")
 except Exception as e:
     logger.error(f"❌ Erreur lors de la création du moteur SQL : {e}")
     engine = None

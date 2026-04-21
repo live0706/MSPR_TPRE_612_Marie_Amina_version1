@@ -1,44 +1,44 @@
 {
-  "generated_at": "2026-04-07T10:27:34.143686Z",
-  "total_rows": 181291,
-  "duplicate_trip_ids": 0,
+  "generated_at": "2026-04-21T18:37:39.203647Z",
+  "total_rows": 187017,
+  "duplicate_trip_ids": 42495,
   "missing_by_column": {
     "trip_id": 0,
-    "operator_name": 0,
+    "operator_name": 6,
     "origin_city": 0,
     "destination_city": 0,
+    "origin_lat": 0,
+    "origin_lon": 0,
+    "destination_lat": 0,
+    "destination_lon": 0,
     "departure_time": 0,
     "arrival_time": 0,
     "service_type": 0,
     "train_type": 0,
+    "distance_km": 0,
     "co2_emissions": 0,
-    "distance_km": 180942,
-    "source_origin": 0,
-    "origin_lat": 415,
-    "origin_lon": 415,
-    "destination_lat": 415,
-    "destination_lon": 415
+    "source_origin": 0
   },
   "missing_rate_by_column": {
     "trip_id": 0.0,
     "operator_name": 0.0,
     "origin_city": 0.0,
     "destination_city": 0.0,
+    "origin_lat": 0.0,
+    "origin_lon": 0.0,
+    "destination_lat": 0.0,
+    "destination_lon": 0.0,
     "departure_time": 0.0,
     "arrival_time": 0.0,
     "service_type": 0.0,
     "train_type": 0.0,
+    "distance_km": 0.0,
     "co2_emissions": 0.0,
-    "distance_km": 0.9981,
-    "source_origin": 0.0,
-    "origin_lat": 0.0023,
-    "origin_lon": 0.0023,
-    "destination_lat": 0.0023,
-    "destination_lon": 0.0023
+    "source_origin": 0.0
   },
   "service_type_counts": {
-    "Jour": 154906,
-    "Nuit": 26385
+    "Jour": 171413,
+    "Nuit": 15604
   },
-  "co2_zero_or_missing": 180942
+  "co2_zero_or_missing": 0
 }
