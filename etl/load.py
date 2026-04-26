@@ -180,6 +180,17 @@ def run_load(data):
         if col in df_to_load.columns:
             df_to_load[col] = df_to_load[col].map(_normalize_name)
 
+    for col in [
+        "origin_lat",
+        "origin_lon",
+        "destination_lat",
+        "destination_lon",
+        "distance_km",
+        "co2_emissions",
+    ]:
+        if col in df_to_load.columns:
+            df_to_load[col] = pd.to_numeric(df_to_load[col], errors="coerce")
+
     if RESET_DB:
         logger.info("RESET_DB active: truncating tables")
         _truncate_tables(engine)

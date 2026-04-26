@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-21T18:37:39.203647Z",
-  "total_rows": 187017,
-  "duplicate_trip_ids": 42495,
+  "generated_at": "2026-04-26T20:09:11.193319Z",
+  "total_rows": 10782,
+  "duplicate_trip_ids": 0,
   "missing_by_column": {
     "trip_id": 0,
-    "operator_name": 6,
+    "operator_name": 0,
     "origin_city": 0,
     "destination_city": 0,
     "origin_lat": 0,
@@ -37,8 +37,8 @@
     "source_origin": 0.0
   },
   "service_type_counts": {
-    "Jour": 171413,
-    "Nuit": 15604
+    "Jour": 9852,
+    "Nuit": 930
   },
   "co2_zero_or_missing": 0
 }

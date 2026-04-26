@@ -1,7 +1,6 @@
 import time
 import os
 # Import des modules locaux
-from discover import update_sources_file
 from extract import UniversalFetcher
 from transform import run_transform
 from load import run_load
@@ -20,9 +19,9 @@ def main():
     print("En attente de la base de données (15s)...")
     time.sleep(15)
 
-    # --- ETAPE 0 : MISE A JOUR AUTOMATIQUE DES SOURCES ---
-    print("\n--- ETAPE 0 : DECOUVERTE DU CATALOGUE EUROPEEN ---")
-    update_sources_file()
+    # --- ETAPE 0 : CHARGEMENT DES SOURCES ---
+    print("\n--- ETAPE 0 : CHARGEMENT DES SOURCES ---")
+    print(f"Configuration source utilisee : {SOURCE_FILE}")
 
     # --- ETAPE 1 : EXTRACTION ---
     print("\n--- ETAPE 1 : EXTRACTION ---")

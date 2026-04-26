@@ -3,9 +3,9 @@
 Pipeline ETL complet pour les donnees ferroviaires europeennes : collecte, transformation, chargement dans PostgreSQL, exposition via API REST, et visualisation via un dashboard Streamlit.
 
 ## Fonctionnement (resume)
-1. Decouverte des sources (`etl/discover.py`) -> generation de `etl/sources.json`
+1. Chargement des sources depuis `etl/sources.json` (source de verite unique)
 2. Extraction (HTML/CSV/JSON/GTFS) dans `data/raw`
-3. Transformation (normalisation colonnes, conversion heures, filtrage `distance_km`, filtrage rail-only sur GTFS, calcul CO2)
+3. Transformation (normalisation colonnes, validation `origin_city`, filtrage `distance_km >= 400`, filtrage rail-only sur GTFS, calcul CO2)
 4. Rapport de qualite + metriques de modele
 5. Chargement PostgreSQL (`etl/load.py`)
 6. API + dashboard
@@ -26,6 +26,7 @@ Pipeline ETL complet pour les donnees ferroviaires europeennes : collecte, trans
    - `python .\etl\main_etl.py`
 
 ## Sources de donnees
+- Source unique utilisee par l ETL : `etl/sources.json`
 - Back-on-Track (CSV) : actif, fournit horaires et distances.
 - Wikipedia (HTML) : actif mais quasi filtre par `distance_km`.
 - GTFS rail : supporte, a ajouter pour augmenter le volume.

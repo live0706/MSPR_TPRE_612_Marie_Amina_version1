@@ -29,7 +29,7 @@ class UniversalFetcher:
         if not os.path.exists(self.config_path):
             logger.error(f"Ã¢ÂÅ’ Config file not found: {self.config_path}")
             return []
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     def download_resource(self, url, source_id, file_type):
@@ -162,6 +162,7 @@ class UniversalFetcher:
             
             if not df.empty:
                 df['source_origin'] = src_id
+                df.attrs["source_id"] = src_id
                 extracted_data.append(df)
                 logger.info(f"ðŸ“Š {src_id}: {len(df)} rows extracted.")
             else:
