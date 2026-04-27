@@ -1,19 +1,31 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-# --- CONFIGURATION ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
 RESET_DB = os.getenv("RESET_DB", "true").lower() in ("1", "true", "yes")
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+COUNTRY_METADATA = {
+    "FR": {"name": "France", "keywords": ["france", "sncf", "transilien", "idf", "ile-de-france", "idfm", "ter", "tgv", "intercites", "ouigo", "ouira", "atoumod", "breizhgo", "nomad", "zou", "mobigo", "remi", "grand est", "hauts-de-france", "occitanie", "bretagne", "normandie", "pays de la loire", "centre-val-de-loire", "aix-marseille", "nouvelle-aquitaine", "auvergne-rhone-alpes", "liO"]},
+    "ES": {"name": "Spain", "keywords": ["spain", "espagne", "renfe", "ave", "madrid", "barcelona", "valencia", "sevilla"]},
+    "IT": {"name": "Italy", "keywords": ["italy", "italie", "trenitalia", "rome", "milan", "venice", "turin", "naples"]},
+    "DE": {"name": "Germany", "keywords": ["germany", "allemagne", "deutsche bahn", "db", "berlin", "munich", "hamburg", "frankfurt", "flixtrain"]},
+    "GB": {"name": "United Kingdom", "keywords": ["united kingdom", "uk", "london", "britain", "eurostar international"]},
+    "BE": {"name": "Belgium", "keywords": ["belgium", "belgique", "brussels", "bruxelles"]},
+    "NL": {"name": "Netherlands", "keywords": ["netherlands", "pays-bas", "amsterdam", "rotterdam"]},
+    "CH": {"name": "Switzerland", "keywords": ["switzerland", "suisse", "zurich", "geneva", "lausanne", "cff", "sbb"]},
+    "ZZ": {"name": "Unknown", "keywords": []},
+}
+
 
 def _safe_text(value):
     if value is None:
@@ -25,15 +37,18 @@ def _safe_text(value):
             return str(value)
     return str(value)
 
+
 def _provider_to_text(value):
     if isinstance(value, dict):
         return value.get("name") or value.get("id") or _safe_text(value)
     return _safe_text(value)
 
+
 def _license_to_text(value):
     if isinstance(value, dict):
         return value.get("id") or value.get("name") or value.get("title") or _safe_text(value)
     return _safe_text(value)
+
 
 def _normalize_name(value):
     if value is None:
@@ -43,10 +58,20 @@ def _normalize_name(value):
         return None
     return text_val
 
+
+def _normalize_scalar(value):
+    if pd.isna(value):
+        return None
+    return value
+
+
 def _stage_and_merge(engine, df, staging_table, target_table, columns, conflict_cols):
     if df.empty:
         return
-    df.to_sql(staging_table, engine, if_exists="replace", index=False, method="multi", chunksize=1000)
+    cleaned_df = df.copy()
+    for column in cleaned_df.columns:
+        cleaned_df[column] = cleaned_df[column].map(_normalize_scalar)
+    cleaned_df.to_sql(staging_table, engine, if_exists="replace", index=False, method="multi", chunksize=1000)
     cols_csv = ", ".join(columns)
     conflict_csv = ", ".join(conflict_cols)
     insert_sql = f"""
@@ -58,10 +83,12 @@ def _stage_and_merge(engine, df, staging_table, target_table, columns, conflict_
         conn.execute(text(insert_sql))
         conn.execute(text(f"DROP TABLE IF EXISTS {staging_table}"))
 
+
 def _stage_and_merge_routes(engine, df):
     if df.empty:
         return
-    df.to_sql("routes_staging", engine, if_exists="replace", index=False, method="multi", chunksize=1000)
+    working_df = df.copy()
+    working_df.to_sql("routes_staging", engine, if_exists="replace", index=False, method="multi", chunksize=1000)
     insert_sql = """
         INSERT INTO routes (operator_id, origin_station_id, destination_station_id, distance_km, source_id)
         SELECT
@@ -72,8 +99,12 @@ def _stage_and_merge_routes(engine, df):
             rs.source_id
         FROM routes_staging rs
         LEFT JOIN operators o ON o.name = rs.operator_name
-        LEFT JOIN stations so ON so.name = rs.origin_city
-        LEFT JOIN stations sd ON sd.name = rs.destination_city
+        LEFT JOIN stations so
+            ON so.name = rs.origin_city
+            AND COALESCE(so.country, '') = COALESCE(rs.origin_country, '')
+        LEFT JOIN stations sd
+            ON sd.name = rs.destination_city
+            AND COALESCE(sd.country, '') = COALESCE(rs.destination_country, '')
         WHERE rs.operator_name IS NOT NULL
           AND rs.origin_city IS NOT NULL
           AND rs.destination_city IS NOT NULL
@@ -86,10 +117,12 @@ def _stage_and_merge_routes(engine, df):
         conn.execute(text(insert_sql))
         conn.execute(text("DROP TABLE IF EXISTS routes_staging"))
 
+
 def _stage_and_merge_trips(engine, df):
     if df.empty:
         return
-    df.to_sql("trips_staging", engine, if_exists="replace", index=False, method="multi", chunksize=2000)
+    working_df = df.copy()
+    working_df.to_sql("trips_staging", engine, if_exists="replace", index=False, method="multi", chunksize=2000)
     insert_sql = """
         INSERT INTO trips (trip_id, route_id, departure_time, arrival_time, service_type, train_type, co2_emissions, source_id)
         SELECT
@@ -103,8 +136,12 @@ def _stage_and_merge_trips(engine, df):
             ts.source_id
         FROM trips_staging ts
         LEFT JOIN operators o ON o.name = ts.operator_name
-        LEFT JOIN stations so ON so.name = ts.origin_city
-        LEFT JOIN stations sd ON sd.name = ts.destination_city
+        LEFT JOIN stations so
+            ON so.name = ts.origin_city
+            AND COALESCE(so.country, '') = COALESCE(ts.origin_country, '')
+        LEFT JOIN stations sd
+            ON sd.name = ts.destination_city
+            AND COALESCE(sd.country, '') = COALESCE(ts.destination_country, '')
         LEFT JOIN routes r
             ON r.operator_id = o.operator_id
             AND r.origin_station_id = so.station_id
@@ -119,42 +156,308 @@ def _stage_and_merge_trips(engine, df):
         conn.execute(text(insert_sql))
         conn.execute(text("DROP TABLE IF EXISTS trips_staging"))
 
+
+def _stage_and_merge_analytic_trains(engine, df):
+    if df.empty:
+        return
+    working_df = df.copy()
+    working_df.to_sql("facts_night_trains_staging", engine, if_exists="replace", index=False, method="multi", chunksize=2000)
+    insert_sql = """
+        INSERT INTO facts_night_trains (
+            trip_id,
+            route_id,
+            night_train,
+            country_id,
+            year_id,
+            operator_id,
+            is_night,
+            distance_km,
+            co2_emissions
+        )
+        SELECT
+            s.trip_id,
+            s.route_id,
+            s.night_train,
+            c.country_id,
+            y.year_id,
+            o.operator_id,
+            s.is_night,
+            s.distance_km,
+            s.co2_emissions
+        FROM facts_night_trains_staging s
+        JOIN dim_countries c ON c.country_code = s.country_code
+        JOIN dim_years y ON y.year = s.year
+        JOIN dim_operators o ON o.operator_name = s.operator_name
+        ON CONFLICT (trip_id) DO NOTHING
+    """
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+        conn.execute(text("DROP TABLE IF EXISTS facts_night_trains_staging"))
+
+
+def _stage_and_merge_country_stats(engine, df):
+    if df.empty:
+        return
+    working_df = df.copy()
+    working_df.to_sql("facts_country_stats_staging", engine, if_exists="replace", index=False, method="multi", chunksize=1000)
+    insert_sql = """
+        INSERT INTO facts_country_stats (
+            passengers,
+            co2_emissions,
+            co2_per_passenger,
+            country_id,
+            year_id
+        )
+        SELECT
+            s.passengers,
+            s.co2_emissions,
+            s.co2_per_passenger,
+            c.country_id,
+            y.year_id
+        FROM facts_country_stats_staging s
+        JOIN dim_countries c ON c.country_code = s.country_code
+        JOIN dim_years y ON y.year = s.year
+        ON CONFLICT (country_id, year_id) DO NOTHING
+    """
+    with engine.begin() as conn:
+        conn.execute(text(insert_sql))
+        conn.execute(text("DROP TABLE IF EXISTS facts_country_stats_staging"))
+
+
 def get_db_engine():
-    db_url = os.getenv('DATABASE_URL')
+    db_url = os.getenv("DATABASE_URL")
     if not db_url:
         logger.error("DATABASE_URL missing from environment variables")
         return None
     try:
-        engine = create_engine(db_url)
-        return engine
-    except Exception as e:
-        logger.error(f"DB Connection Error: {e}")
+        return create_engine(db_url)
+    except Exception as exc:
+        logger.error(f"DB Connection Error: {exc}")
         return None
+
 
 def _load_sources_from_file():
     if not os.path.exists(SOURCE_FILE):
         logger.warning("sources.json not found, skipping sources load")
         return []
     try:
-        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(SOURCE_FILE, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
         if not isinstance(data, list):
             return []
-        valid = []
-        for src in data:
-            if not isinstance(src, dict) or not src.get("url") or src.get("enabled") is False:
-                continue
-            valid.append(src)
-        return valid
-    except Exception as e:
-        logger.error(f"Failed to read sources.json: {e}")
+        return [
+            src
+            for src in data
+            if isinstance(src, dict) and src.get("url") and src.get("enabled") is not False
+        ]
+    except Exception as exc:
+        logger.error(f"Failed to read sources.json: {exc}")
         return []
+
 
 def _truncate_tables(engine):
     with engine.begin() as conn:
-        conn.execute(text(
-            "TRUNCATE trips, routes, stations, operators, ingestions, sources RESTART IDENTITY CASCADE"
-        ))
+        conn.execute(
+            text(
+                """
+                TRUNCATE
+                    facts_country_stats,
+                    facts_night_trains,
+                    dim_operators,
+                    dim_years,
+                    dim_countries,
+                    trips,
+                    routes,
+                    stations,
+                    operators,
+                    ingestions,
+                    sources
+                RESTART IDENTITY CASCADE
+                """
+            )
+        )
+
+
+def _country_name_from_code(country_code):
+    return COUNTRY_METADATA.get(country_code, COUNTRY_METADATA["ZZ"])["name"]
+
+
+def _infer_country_code(row):
+    raw_chunks = [
+        row.get("source_key"),
+        row.get("source_name"),
+        row.get("source_provider"),
+        row.get("operator_name"),
+        row.get("origin_city"),
+        row.get("destination_city"),
+    ]
+    haystack = " ".join(str(chunk).lower() for chunk in raw_chunks if chunk)
+
+    for country_code, metadata in COUNTRY_METADATA.items():
+        for keyword in metadata["keywords"]:
+            if keyword.lower() in haystack:
+                return country_code
+    return "ZZ"
+
+
+def _build_night_train_name(row):
+    origin_city = _normalize_name(row.get("origin_city"))
+    destination_city = _normalize_name(row.get("destination_city"))
+    if origin_city and destination_city:
+        return f"{origin_city} - {destination_city}"
+    if origin_city:
+        return origin_city
+    if destination_city:
+        return destination_city
+    return row.get("trip_id") or "unknown_trip"
+
+
+def _infer_year(row):
+    departure_time = row.get("departure_time")
+    if pd.notna(departure_time):
+        year = int(departure_time.year)
+        if 2010 <= year <= 2100:
+            return year
+
+    trip_id = str(row.get("trip_id") or "")
+    match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", trip_id)
+    if match:
+        return int(match.group(1))
+
+    match = re.search(r"(?<!\d)(20\d{2})(\d{2})(\d{2})(?!\d)", trip_id)
+    if match:
+        return int(match.group(1))
+
+    match = re.search(r"(?<!\d)(20\d{2})(?!\d)", trip_id)
+    if match:
+        return int(match.group(1))
+
+    return datetime.utcnow().year
+
+
+def _load_analytic_layer(engine):
+    query = """
+        SELECT
+            t.trip_id,
+            t.route_id,
+            t.departure_time,
+            t.service_type,
+            t.train_type,
+            t.co2_emissions,
+            r.distance_km,
+            o.name AS operator_name,
+            so.name AS origin_city,
+            sd.name AS destination_city,
+            s.source_key,
+            s.name AS source_name,
+            s.provider AS source_provider
+        FROM trips t
+        LEFT JOIN routes r ON t.route_id = r.route_id
+        LEFT JOIN operators o ON r.operator_id = o.operator_id
+        LEFT JOIN stations so ON r.origin_station_id = so.station_id
+        LEFT JOIN stations sd ON r.destination_station_id = sd.station_id
+        LEFT JOIN sources s ON t.source_id = s.source_id
+    """
+    analytic_df = pd.read_sql(query, engine)
+    if analytic_df.empty:
+        logger.warning("Analytic layer skipped: no trips found in database")
+        return
+
+    analytic_df["departure_time"] = pd.to_datetime(analytic_df["departure_time"], errors="coerce")
+    analytic_df = analytic_df.dropna(subset=["trip_id", "departure_time"]).copy()
+    if analytic_df.empty:
+        logger.warning("Analytic layer skipped: trips missing identifiers or dates")
+        return
+
+    analytic_df["operator_name"] = analytic_df["operator_name"].map(_normalize_name).fillna("Unknown Operator")
+    analytic_df["distance_km"] = pd.to_numeric(analytic_df["distance_km"], errors="coerce").fillna(0.0)
+    analytic_df["co2_emissions"] = pd.to_numeric(analytic_df["co2_emissions"], errors="coerce").fillna(0.0)
+    analytic_df["year"] = analytic_df.apply(_infer_year, axis=1)
+    analytic_df["is_night"] = analytic_df["service_type"].fillna("").eq("Nuit")
+    analytic_df["country_code"] = analytic_df.apply(_infer_country_code, axis=1)
+    analytic_df["country_name"] = analytic_df["country_code"].map(_country_name_from_code)
+    analytic_df["night_train"] = analytic_df.apply(_build_night_train_name, axis=1)
+
+    countries_df = (
+        analytic_df[["country_code", "country_name"]]
+        .drop_duplicates()
+        .sort_values(["country_name", "country_code"])
+    )
+    _stage_and_merge(
+        engine,
+        countries_df,
+        "dim_countries_staging",
+        "dim_countries",
+        ["country_code", "country_name"],
+        ["country_code"],
+    )
+
+    years_df = (
+        analytic_df[["year"]]
+        .drop_duplicates()
+        .sort_values("year")
+        .assign(is_after_2010=lambda frame: frame["year"] >= 2010)
+    )
+    _stage_and_merge(
+        engine,
+        years_df,
+        "dim_years_staging",
+        "dim_years",
+        ["year", "is_after_2010"],
+        ["year"],
+    )
+
+    analytic_operators_df = (
+        analytic_df[["operator_name"]]
+        .drop_duplicates()
+        .rename(columns={"operator_name": "operator_name"})
+        .sort_values("operator_name")
+    )
+    _stage_and_merge(
+        engine,
+        analytic_operators_df,
+        "dim_operators_staging",
+        "dim_operators",
+        ["operator_name"],
+        ["operator_name"],
+    )
+
+    fact_trains_df = analytic_df[
+        [
+            "trip_id",
+            "route_id",
+            "night_train",
+            "country_code",
+            "year",
+            "operator_name",
+            "is_night",
+            "distance_km",
+            "co2_emissions",
+        ]
+    ].drop_duplicates(subset=["trip_id"])
+    _stage_and_merge_analytic_trains(engine, fact_trains_df)
+
+    country_stats_df = (
+        analytic_df.groupby(["country_code", "country_name", "year"], as_index=False)
+        .agg(
+            passengers=("trip_id", "nunique"),
+            co2_emissions=("co2_emissions", "sum"),
+        )
+    )
+    country_stats_df["passengers"] = country_stats_df["passengers"].astype(float)
+    country_stats_df["co2_per_passenger"] = country_stats_df.apply(
+        lambda row: round(row["co2_emissions"] / row["passengers"], 6) if row["passengers"] else 0.0,
+        axis=1,
+    )
+    _stage_and_merge_country_stats(
+        engine,
+        country_stats_df[
+            ["country_code", "year", "passengers", "co2_emissions", "co2_per_passenger"]
+        ],
+    )
+
+    logger.info("Analytic layer loaded successfully")
+
 
 def run_load(data):
     logger.info("Starting data load process...")
@@ -162,12 +465,11 @@ def run_load(data):
     if not engine:
         return
 
-    df_to_load = pd.DataFrame()
     if isinstance(data, str) and os.path.exists(data):
         logger.info(f"Reading file: {data}")
-        df_to_load = pd.read_csv(data, parse_dates=['departure_time', 'arrival_time'])
+        df_to_load = pd.read_csv(data, parse_dates=["departure_time", "arrival_time"])
     elif isinstance(data, pd.DataFrame):
-        df_to_load = data
+        df_to_load = data.copy()
     else:
         logger.warning("Invalid data input provided")
         return
@@ -176,11 +478,11 @@ def run_load(data):
         logger.warning("No data to process")
         return
 
-    for col in ["operator_name", "origin_city", "destination_city"]:
-        if col in df_to_load.columns:
-            df_to_load[col] = df_to_load[col].map(_normalize_name)
+    for column in ["operator_name", "origin_city", "destination_city"]:
+        if column in df_to_load.columns:
+            df_to_load[column] = df_to_load[column].map(_normalize_name)
 
-    for col in [
+    for column in [
         "origin_lat",
         "origin_lon",
         "destination_lat",
@@ -188,8 +490,8 @@ def run_load(data):
         "distance_km",
         "co2_emissions",
     ]:
-        if col in df_to_load.columns:
-            df_to_load[col] = pd.to_numeric(df_to_load[col], errors="coerce")
+        if column in df_to_load.columns:
+            df_to_load[column] = pd.to_numeric(df_to_load[column], errors="coerce")
 
     if RESET_DB:
         logger.info("RESET_DB active: truncating tables")
@@ -198,62 +500,104 @@ def run_load(data):
     sources_list = _load_sources_from_file()
     if sources_list:
         now = datetime.utcnow()
-        df_sources = pd.DataFrame([
-            {
-                "source_key": s.get("id"),
-                "name": s.get("description"),
-                "url": s.get("url"),
-                "source_type": s.get("type"),
-                "provider": _provider_to_text(s.get("provider")),
-                "license": _license_to_text(s.get("license")),
-                "last_seen": now,
-            }
-            for s in sources_list
-        ]).dropna(subset=["source_key", "url"]).drop_duplicates(subset=["source_key"])
+        df_sources = pd.DataFrame(
+            [
+                {
+                    "source_key": src.get("id"),
+                    "name": src.get("description"),
+                    "url": src.get("url"),
+                    "source_type": src.get("type"),
+                    "provider": _provider_to_text(src.get("provider")),
+                    "license": _license_to_text(src.get("license")),
+                    "last_seen": now,
+                }
+                for src in sources_list
+            ]
+        ).dropna(subset=["source_key", "url"]).drop_duplicates(subset=["source_key"])
 
         if not df_sources.empty:
-            df_sources.to_sql("sources", engine, if_exists="append", index=False, method="multi")
+            _stage_and_merge(
+                engine,
+                df_sources,
+                "sources_staging",
+                "sources",
+                ["source_key", "name", "url", "source_type", "provider", "license", "last_seen"],
+                ["source_key"],
+            )
 
     src_map_df = pd.read_sql("SELECT source_id, source_key FROM sources", engine)
     source_key_to_id = dict(zip(src_map_df["source_key"], src_map_df["source_id"]))
     df_to_load["source_id"] = df_to_load["source_origin"].map(source_key_to_id)
+    source_metadata_map = {
+        src.get("id"): {
+            "source_name": src.get("description"),
+            "source_provider": _provider_to_text(src.get("provider")),
+        }
+        for src in sources_list
+    }
+    df_to_load["source_name"] = df_to_load["source_origin"].map(
+        lambda key: source_metadata_map.get(key, {}).get("source_name")
+    )
+    df_to_load["source_provider"] = df_to_load["source_origin"].map(
+        lambda key: source_metadata_map.get(key, {}).get("source_provider")
+    )
+    df_to_load["country_code"] = df_to_load.apply(_infer_country_code, axis=1)
+    df_to_load["country_name"] = df_to_load["country_code"].map(_country_name_from_code)
+    df_to_load["origin_country"] = df_to_load["country_name"]
+    df_to_load["destination_country"] = df_to_load["country_name"]
 
     try:
-        ing_df = df_to_load.groupby("source_origin", dropna=False).size().reset_index(name="row_count")
-        ing_df["source_id"] = ing_df["source_origin"].map(source_key_to_id)
-        ing_df["fetched_at"] = datetime.utcnow()
-        ing_df["status"] = "success"
-        ing_df["raw_path"] = None
-        ing_df = ing_df[["source_id", "fetched_at", "raw_path", "status", "row_count"]]
-        ing_df.to_sql("ingestions", engine, if_exists="append", index=False, method="multi")
-    except Exception as e:
-        logger.warning(f"Ingestion log skipped: {e}")
+        ingestions_df = df_to_load.groupby("source_origin", dropna=False).size().reset_index(name="row_count")
+        ingestions_df["source_id"] = ingestions_df["source_origin"].map(source_key_to_id)
+        ingestions_df["fetched_at"] = datetime.utcnow()
+        ingestions_df["status"] = "success"
+        ingestions_df["raw_path"] = None
+        ingestions_df = ingestions_df[["source_id", "fetched_at", "raw_path", "status", "row_count"]]
+        ingestions_df.to_sql("ingestions", engine, if_exists="append", index=False, method="multi")
+    except Exception as exc:
+        logger.warning(f"Ingestion log skipped: {exc}")
 
-    # Process Operators
-    ops = df_to_load[["operator_name", "source_id"]].rename(columns={"operator_name": "name"})
-    ops = ops.dropna(subset=["name"]).drop_duplicates(subset=["name"])
-    ops["country"] = None
-    if not ops.empty:
-        _stage_and_merge(engine, ops, "operators_staging", "operators", ["name", "country", "source_id"], ["name"])
-
-    # Process Stations
-    origin_df = df_to_load[["origin_city", "origin_lat", "origin_lon", "source_id"]].rename(
-        columns={"origin_city": "name", "origin_lat": "lat", "origin_lon": "lon"}
+    operators_df = df_to_load[["operator_name", "source_id"]].rename(columns={"operator_name": "name"})
+    operators_df = operators_df.dropna(subset=["name"]).drop_duplicates(subset=["name"])
+    operators_df["country"] = (
+        df_to_load.groupby("operator_name")["country_name"].first().reindex(operators_df["name"]).tolist()
     )
-    dest_df = df_to_load[["destination_city", "destination_lat", "destination_lon", "source_id"]].rename(
-        columns={"destination_city": "name", "destination_lat": "lat", "destination_lon": "lon"}
-    )
-    stations = pd.concat([origin_df, dest_df], ignore_index=True).dropna(subset=["name"])
-    stations["country"] = "Unknown"
-    stations = stations.groupby(["name", "country"], as_index=False).first()
-    if not stations.empty:
-        _stage_and_merge(engine, stations, "stations_staging", "stations", ["name", "country", "lat", "lon", "source_id"], ["name", "country"])
+    if not operators_df.empty:
+        _stage_and_merge(
+            engine,
+            operators_df,
+            "operators_staging",
+            "operators",
+            ["name", "country", "source_id"],
+            ["name"],
+        )
 
-    # Final merges for Routes and Trips
+    origin_df = df_to_load[["origin_city", "origin_lat", "origin_lon", "source_id", "origin_country"]].rename(
+        columns={"origin_city": "name", "origin_lat": "lat", "origin_lon": "lon", "origin_country": "country"}
+    )
+    dest_df = df_to_load[
+        ["destination_city", "destination_lat", "destination_lon", "source_id", "destination_country"]
+    ].rename(
+        columns={"destination_city": "name", "destination_lat": "lat", "destination_lon": "lon", "destination_country": "country"}
+    )
+    stations_df = pd.concat([origin_df, dest_df], ignore_index=True).dropna(subset=["name"])
+    stations_df = stations_df.groupby(["name", "country"], as_index=False).first()
+    if not stations_df.empty:
+        _stage_and_merge(
+            engine,
+            stations_df,
+            "stations_staging",
+            "stations",
+            ["name", "country", "lat", "lon", "source_id"],
+            ["name", "country"],
+        )
+
     _stage_and_merge_routes(engine, df_to_load)
     _stage_and_merge_trips(engine, df_to_load)
+    _load_analytic_layer(engine)
 
     logger.info("Load process completed successfully")
+
 
 if __name__ == "__main__":
     processed_path = os.path.join(BASE_DIR, "..", "data", "processed", "trips_cleaned_final.csv")

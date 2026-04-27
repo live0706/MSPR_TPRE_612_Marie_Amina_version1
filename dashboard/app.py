@@ -1,108 +1,276 @@
-import streamlit as st
-import pandas as pd
-from sqlalchemy import create_engine, text
-import plotly.express as px
 import os
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="ObRail Dashboard", page_icon="🚄", layout="wide")
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import requests
+import streamlit as st
 
-# Connexion BDD
-DATABASE_URL = os.getenv('DATABASE_URL')
+st.set_page_config(page_title="ObRail Dashboard", page_icon="🚆", layout="wide")
 
-# --- FONCTION DE CHARGEMENT ---
-# @st.cache_data permet de garder les données en mémoire pour que le site soit rapide
-@st.cache_data(ttl=60) # Rafraîchit toutes les 60 secondes
-def load_data():
+API_BASE_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
+
+
+@st.cache_data(ttl=120)
+def api_get(endpoint, params=None):
+    url = f"{API_BASE_URL}{endpoint}"
+    response = requests.get(url, params=params, timeout=5)
+    response.raise_for_status()
+    return response.json()
+
+
+def safe_api_get(endpoint, params=None, default=None):
     try:
-        engine = create_engine(DATABASE_URL)
-        query = """
-            SELECT
-                t.trip_id,
-                o.name AS operator_name,
-                so.name AS origin_city,
-                sd.name AS destination_city,
-                t.departure_time,
-                t.arrival_time,
-                t.service_type,
-                t.train_type,
-                r.distance_km,
-                t.co2_emissions
-            FROM trips t
-            LEFT JOIN routes r ON t.route_id = r.route_id
-            LEFT JOIN operators o ON r.operator_id = o.operator_id
-            LEFT JOIN stations so ON r.origin_station_id = so.station_id
-            LEFT JOIN stations sd ON r.destination_station_id = sd.station_id
-        """
-        with engine.connect() as conn:
-            df = pd.read_sql(query, conn)
-        return df
-    except Exception as e:
-        st.error(f"Erreur de connexion à la base de données : {e}")
-        return pd.DataFrame()
+        return api_get(endpoint, params=params)
+    except Exception as exc:
+        st.error(f"Erreur API sur {endpoint}: {exc}")
+        return default
 
-# --- INTERFACE UTILISATEUR ---
 
-st.title("🚄 ObRail Europe - Observatoire Ferroviaire")
-st.markdown("Ce tableau de bord permet de comparer l'offre de trains de **Jour** et de **Nuit** en Europe.")
+def build_filter_params(country_code, operator_name, year):
+    params = {}
+    if country_code and country_code != "Tous":
+        params["country_code"] = country_code
+    if operator_name and operator_name != "Tous":
+        params["operator_name"] = operator_name
+    if year and year != "Tous":
+        params["year"] = int(year)
+    return params
 
-# 1. Chargement des données
-df = load_data()
 
-if df.empty:
-    st.warning("Aucune donnée disponible. Lancez l'ETL d'abord !")
-else:
-    # 2. Indicateurs Clés (KPIs)
-    st.header("1. Indicateurs Globaux")
+st.title("ObRail Europe")
+st.caption("Dashboard analytique connecte a l'API ObRail.")
+
+countries = safe_api_get("/api/countries", default=[]) or []
+operators = safe_api_get("/api/operators", default=[]) or []
+kpis = safe_api_get("/api/dashboard/kpis", default={}) or {}
+
+country_map = {"Tous": None}
+for country in countries:
+    country_map[country["country_name"]] = country["country_code"]
+
+operator_map = {"Tous": None}
+for operator in operators:
+    operator_map[operator["operator_name"]] = operator["operator_name"]
+
+with st.sidebar:
+    st.header("Navigation")
+    page = st.radio(
+        "Page",
+        ["Accueil", "Dashboard", "Trains", "Operateurs", "Sources et qualite"],
+    )
+
+    st.header("Filtres")
+    selected_country_name = st.selectbox("Pays", list(country_map.keys()))
+    selected_operator_name = st.selectbox("Operateur", list(operator_map.keys()))
+    train_type = st.selectbox("Type de train", ["Tous", "Nuit", "Jour"])
+
+    years_covered = kpis.get("years_covered", "")
+    years = ["Tous"]
+    if "-" in years_covered:
+        start_year, end_year = years_covered.split("-", 1)
+        if start_year.isdigit() and end_year.isdigit():
+            years.extend([str(year) for year in range(int(start_year), int(end_year) + 1)])
+    selected_year = st.selectbox("Annee", years)
+
+filter_params = build_filter_params(
+    country_map[selected_country_name],
+    operator_map[selected_operator_name],
+    selected_year,
+)
+
+
+def render_overview():
+    timeline = safe_api_get("/api/statistics/timeline", default=[]) or []
+    comparison = safe_api_get("/api/analysis/train-types-comparison", default=[]) or []
+
     col1, col2, col3, col4 = st.columns(4)
-    
-    total_trains = len(df)
-    night_trains = len(df[df['service_type'] == 'Nuit'])
-    avg_co2 = df['co2_emissions'].mean()
-    nb_operators = df['operator_name'].nunique()
+    col1.metric("Pays couverts", int(kpis.get("total_countries", 0)))
+    col2.metric("Trains references", int(kpis.get("total_trains", 0)))
+    col3.metric("Operateurs", int(kpis.get("total_operators", 0)))
+    col4.metric("CO2 moyen / passager", f"{float(kpis.get('avg_co2_per_passenger', 0.0)):.3f}")
 
-    col1.metric("Total Trajets", total_trains)
-    col2.metric("Trains de Nuit", night_trains, delta=f"{night_trains/total_trains:.1%}")
-    col3.metric("Émission Moyenne CO2", f"{avg_co2:.2f} kg")
-    col4.metric("Opérateurs", nb_operators)
+    st.subheader("Synthese")
+    summary_col1, summary_col2 = st.columns(2)
+    summary_col1.info(
+        f"Periode couverte : {kpis.get('years_covered', 'N/A')}\n\n"
+        f"Volume agrege : {float(kpis.get('total_passengers', 0.0)):.0f}\n\n"
+        f"CO2 total agrege : {float(kpis.get('total_co2_emissions', 0.0)):.2f}"
+    )
 
-    st.divider()
+    if comparison:
+        comparison_df = pd.DataFrame(comparison)
+        fig = px.bar(
+            comparison_df,
+            x="train_type",
+            y="train_count",
+            color="train_type",
+            title="Volume de trains jour / nuit",
+            color_discrete_map={"night": "#1D4ED8", "day": "#F59E0B"},
+        )
+        fig.update_xaxes(ticktext=["Jour", "Nuit"], tickvals=["day", "night"])
+        summary_col2.plotly_chart(fig, use_container_width=True)
+    else:
+        summary_col2.warning("Aucune comparaison disponible.")
 
-    # 3. Graphiques (Plotly)
-    st.header("2. Analyse Comparative")
-    
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        st.subheader("Répartition Jour / Nuit")
-        # Camembert simple
-        fig_pie = px.pie(df, names='service_type', title='Part des trains de nuit', 
-                         color='service_type', color_discrete_map={'Nuit':'#1E1E5A', 'Jour':'#FFC107'})
-        st.plotly_chart(fig_pie, use_container_width=True)
+    if timeline:
+        timeline_df = pd.DataFrame(timeline)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=timeline_df["year"], y=timeline_df["passengers"], name="Volume agrege"))
+        fig.add_trace(go.Scatter(x=timeline_df["year"], y=timeline_df["co2_emissions"], name="CO2", yaxis="y2"))
+        fig.update_layout(
+            title="Evolution temporelle",
+            xaxis_title="Annee",
+            yaxis_title="Volume agrege",
+            yaxis2=dict(title="CO2", overlaying="y", side="right"),
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    with c2:
-        st.subheader("Top Opérateurs (Volume)")
-        # Bar chart horizontal
-        top_ops = df['operator_name'].value_counts().head(10).reset_index()
-        top_ops.columns = ['Opérateur', 'Nombre de Trajets']
-        fig_bar = px.bar(top_ops, x='Nombre de Trajets', y='Opérateur', orientation='h', color='Nombre de Trajets')
-        st.plotly_chart(fig_bar, use_container_width=True)
 
-    # 4. Qualité des Données
-    st.header("3. Contrôle Qualité des Données")
-    
-    # Calcul des taux de remplissage
-    missing_co2 = df['co2_emissions'].isna().sum() + (df['co2_emissions'] == 0).sum()
-    st.info(f"📊 **Qualité CO2 :** {missing_co2} trajets ont une émission nulle ou manquante (estimée par l'ETL).")
+def render_dashboard():
+    metrics = safe_api_get("/api/dashboard/metrics", default=[]) or []
+    ranking = safe_api_get("/api/statistics/co2-ranking", params={"limit": 15}, default=[]) or []
+    coverage = safe_api_get("/api/geographic/coverage", default={}) or {}
 
-    # Explorateur de données
-    with st.expander("🔎 Consulter les données brutes"):
-        # Filtres simples
-        operator_filter = st.selectbox("Filtrer par Opérateur", ["Tous"] + list(df['operator_name'].unique()))
-        
-        if operator_filter != "Tous":
-            df_view = df[df['operator_name'] == operator_filter]
+    if metrics:
+        metrics_df = pd.DataFrame(metrics)
+        fig = px.scatter(
+            metrics_df,
+            x="avg_passengers",
+            y="avg_co2_per_passenger",
+            size="avg_co2_emissions",
+            color="country_name",
+            hover_name="country_name",
+            title="Relation volume / CO2 par pays",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Aucune metrique disponible.")
+
+    col1, col2 = st.columns(2)
+    if ranking:
+        ranking_df = pd.DataFrame(ranking)
+        fig = px.bar(
+            ranking_df,
+            x="country_name",
+            y="avg_co2_per_passenger",
+            color="performance",
+            title="Classement CO2",
+            color_discrete_map={"good": "#10B981", "medium": "#F59E0B", "bad": "#EF4444"},
+        )
+        col1.plotly_chart(fig, use_container_width=True)
+        col2.dataframe(ranking_df, use_container_width=True, hide_index=True)
+
+    if coverage.get("coverage_by_country"):
+        st.subheader("Couverture geographique")
+        coverage_df = pd.DataFrame(coverage["coverage_by_country"])
+        fig = px.bar(
+            coverage_df,
+            x="country_name",
+            y="train_count",
+            title="Trains references par pays",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_trains():
+    if train_type == "Nuit":
+        endpoint = "/api/night-trains/night"
+    elif train_type == "Jour":
+        endpoint = "/api/night-trains/day"
+    else:
+        endpoint = "/api/night-trains"
+
+    trains = safe_api_get(endpoint, params={"limit": 500, **filter_params}, default=[]) or []
+    if not trains:
+        st.warning("Aucun train trouve pour les filtres courants.")
+        return
+
+    trains_df = pd.DataFrame(trains)
+    trains_df["type"] = trains_df["is_night"].map({True: "Nuit", False: "Jour"})
+
+    st.metric("Trains trouves", len(trains_df))
+    st.dataframe(
+        trains_df[
+            ["night_train", "country_name", "operator_name", "year", "type", "distance_km", "co2_emissions"]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    grouped = trains_df.groupby(["country_name", "type"], as_index=False).size()
+    grouped = grouped.rename(columns={"size": "count"})
+    fig = px.bar(
+        grouped,
+        x="country_name",
+        y="count",
+        color="type",
+        title="Repartition des trains par pays",
+        barmode="group",
+        color_discrete_map={"Jour": "#F59E0B", "Nuit": "#1D4ED8"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_operators():
+    operators_list = safe_api_get("/api/operators", params={"limit": 500}, default=[]) or []
+    if not operators_list:
+        st.warning("Aucun operateur disponible.")
+        return
+
+    operators_df = pd.DataFrame(operators_list)
+    st.dataframe(operators_df, use_container_width=True, hide_index=True)
+
+    if selected_operator_name != "Tous":
+        operator_id = operators_df.loc[
+            operators_df["operator_name"] == selected_operator_name, "operator_id"
+        ]
+        if not operator_id.empty:
+            stats = safe_api_get(f"/api/operators/{int(operator_id.iloc[0])}/stats", default={}) or {}
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Trains operes", int(stats.get("total_trains", 0)))
+            col2.metric("Pays desservis", int(stats.get("countries_count", 0)))
+            col3.metric("Operateur", stats.get("operator_name", "N/A"))
+            if stats.get("countries_served"):
+                st.write("Pays desservis :", ", ".join(stats["countries_served"]))
+
+
+def render_quality():
+    quality_payload = safe_api_get("/api/metadata/quality", default={}) or {}
+    sources_payload = safe_api_get("/api/metadata/sources", default={"sources": []}) or {"sources": []}
+
+    quality_report = quality_payload.get("quality_report", {})
+    model_metrics = quality_payload.get("model_metrics", {})
+
+    source_rows = sources_payload.get("sources", [])
+    if source_rows:
+        st.subheader("Sources chargees")
+        st.dataframe(pd.DataFrame(source_rows), use_container_width=True, hide_index=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Rapport qualite")
+        if quality_report:
+            st.json(quality_report)
         else:
-            df_view = df
-            
-        st.dataframe(df_view, use_container_width=True)
+            st.info("Aucun rapport qualite disponible.")
+
+    with col2:
+        st.subheader("Metriques modele")
+        if model_metrics:
+            st.json(model_metrics)
+        else:
+            st.info("Aucune metrique modele disponible.")
+
+
+if page == "Accueil":
+    render_overview()
+elif page == "Dashboard":
+    render_dashboard()
+elif page == "Trains":
+    render_trains()
+elif page == "Operateurs":
+    render_operators()
+else:
+    render_quality()

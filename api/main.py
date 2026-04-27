@@ -1,28 +1,40 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import router as api_router
 
-# --- CONFIGURATION DE L'APPLICATION ---
+from routers import analysis, countries, dashboard, metadata, operators, statistics, trains
+from routes import router as legacy_router
+
 app = FastAPI(
     title="ObRail Europe API",
-    description="API REST modulaire pour les données ferroviaires.",
-    version="1.1.0"
+    description="API analytique pour les donnees ferroviaires europeennes.",
+    version="2.0.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
 )
 
-# Configuration CORS (Pour autoriser le Dashboard à parler à l'API)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En prod, remplacez "*" par l'URL du frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- INCLUSION DES ROUTES ---
-app.include_router(api_router)
+app.include_router(countries.router)
+app.include_router(trains.router)
+app.include_router(dashboard.router)
+app.include_router(statistics.router)
+app.include_router(analysis.router)
+app.include_router(operators.router)
+app.include_router(metadata.router)
+app.include_router(legacy_router)
 
-# --- ROUTE DE SANTÉ (Health Check) ---
+
 @app.get("/")
+def read_root():
+    return {"status": "ok", "message": "API ObRail prete."}
+
+
+@app.get("/health")
 def health_check():
-    """Vérifie que le serveur est en ligne."""
-    return {"status": "ok", "message": "API ObRail prête."}
+    return {"status": "ok"}

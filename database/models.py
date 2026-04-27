@@ -1,9 +1,8 @@
-# database/models.py
-from sqlalchemy import Column, String, Float, DateTime, Integer, ForeignKey
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import declarative_base
 
-# Base déclarative pour SQLAlchemy
 Base = declarative_base()
+
 
 class Source(Base):
     __tablename__ = "sources"
@@ -75,3 +74,62 @@ class Trip(Base):
     co2_emissions = Column(Float)
     source_id = Column(Integer, ForeignKey("sources.source_id"))
     created_at = Column(DateTime)
+
+
+class DimCountry(Base):
+    __tablename__ = "dim_countries"
+
+    country_id = Column(Integer, primary_key=True)
+    country_code = Column(String, unique=True, index=True)
+    country_name = Column(String)
+
+
+class DimYear(Base):
+    __tablename__ = "dim_years"
+
+    year_id = Column(Integer, primary_key=True)
+    year = Column(Integer, unique=True, index=True)
+    is_after_2010 = Column(Boolean, nullable=False, default=True)
+
+
+class DimOperator(Base):
+    __tablename__ = "dim_operators"
+
+    operator_id = Column(Integer, primary_key=True)
+    operator_name = Column(String, unique=True, index=True)
+
+
+class FactNightTrain(Base):
+    __tablename__ = "facts_night_trains"
+
+    fact_id = Column(Integer, primary_key=True)
+    trip_id = Column(String, unique=True, index=True)
+    route_id = Column(Integer)
+    night_train = Column(String, index=True)
+    country_id = Column(Integer, ForeignKey("dim_countries.country_id"))
+    year_id = Column(Integer, ForeignKey("dim_years.year_id"))
+    operator_id = Column(Integer, ForeignKey("dim_operators.operator_id"))
+    is_night = Column(Boolean, nullable=False, default=True)
+    distance_km = Column(Float)
+    co2_emissions = Column(Float)
+
+
+class FactCountryStat(Base):
+    __tablename__ = "facts_country_stats"
+
+    stats_id = Column(Integer, primary_key=True)
+    passengers = Column(Float, nullable=False)
+    co2_emissions = Column(Float, nullable=False)
+    co2_per_passenger = Column(Float, nullable=False)
+    country_id = Column(Integer, ForeignKey("dim_countries.country_id"))
+    year_id = Column(Integer, ForeignKey("dim_years.year_id"))
+
+
+class DashboardMetric(Base):
+    __tablename__ = "dashboard_metrics"
+
+    country_name = Column(String, primary_key=True)
+    country_code = Column(String)
+    avg_passengers = Column(Float)
+    avg_co2_emissions = Column(Float)
+    avg_co2_per_passenger = Column(Float)

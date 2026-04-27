@@ -1,6 +1,16 @@
 -- database/init.sql
+-- Schema ObRail Europe
+-- 1. Couche transactionnelle pour l'ingestion
+-- 2. Couche analytique pour l'API et le dashboard
 
--- Nettoyage préventif (Optionnel : retirez ces lignes pour la production)
+DROP VIEW IF EXISTS dashboard_metrics;
+
+DROP TABLE IF EXISTS facts_country_stats CASCADE;
+DROP TABLE IF EXISTS facts_night_trains CASCADE;
+DROP TABLE IF EXISTS dim_operators CASCADE;
+DROP TABLE IF EXISTS dim_years CASCADE;
+DROP TABLE IF EXISTS dim_countries CASCADE;
+
 DROP TABLE IF EXISTS trips CASCADE;
 DROP TABLE IF EXISTS routes CASCADE;
 DROP TABLE IF EXISTS stations CASCADE;
@@ -8,7 +18,10 @@ DROP TABLE IF EXISTS operators CASCADE;
 DROP TABLE IF EXISTS ingestions CASCADE;
 DROP TABLE IF EXISTS sources CASCADE;
 
--- Table des sources de données (catalogue)
+-- =========================================================
+-- Couche transactionnelle
+-- =========================================================
+
 CREATE TABLE sources (
     source_id SERIAL PRIMARY KEY,
     source_key VARCHAR(150) UNIQUE NOT NULL,
@@ -20,7 +33,6 @@ CREATE TABLE sources (
     last_seen TIMESTAMP
 );
 
--- Historique des ingestions
 CREATE TABLE ingestions (
     ingestion_id SERIAL PRIMARY KEY,
     source_id INTEGER REFERENCES sources(source_id) ON DELETE SET NULL,
@@ -30,7 +42,6 @@ CREATE TABLE ingestions (
     row_count INTEGER
 );
 
--- Opérateurs
 CREATE TABLE operators (
     operator_id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL UNIQUE,
@@ -39,7 +50,6 @@ CREATE TABLE operators (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Gares / stations
 CREATE TABLE stations (
     station_id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -51,7 +61,6 @@ CREATE TABLE stations (
     UNIQUE (name, country)
 );
 
--- Routes (liaisons)
 CREATE TABLE routes (
     route_id SERIAL PRIMARY KEY,
     operator_id INTEGER REFERENCES operators(operator_id) ON DELETE SET NULL,
@@ -63,7 +72,6 @@ CREATE TABLE routes (
     UNIQUE (operator_id, origin_station_id, destination_station_id)
 );
 
--- Trajets
 CREATE TABLE trips (
     trip_id VARCHAR(200) PRIMARY KEY,
     route_id INTEGER REFERENCES routes(route_id) ON DELETE SET NULL,
@@ -76,7 +84,74 @@ CREATE TABLE trips (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index pour performances API
+-- =========================================================
+-- Couche analytique
+-- =========================================================
+
+CREATE TABLE dim_countries (
+    country_id SERIAL PRIMARY KEY,
+    country_code VARCHAR(10) UNIQUE NOT NULL,
+    country_name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE dim_years (
+    year_id SERIAL PRIMARY KEY,
+    year INTEGER UNIQUE NOT NULL,
+    is_after_2010 BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE dim_operators (
+    operator_id SERIAL PRIMARY KEY,
+    operator_name VARCHAR(200) UNIQUE NOT NULL
+);
+
+CREATE TABLE facts_night_trains (
+    fact_id SERIAL PRIMARY KEY,
+    trip_id VARCHAR(200) UNIQUE NOT NULL,
+    route_id INTEGER,
+    night_train VARCHAR(200) NOT NULL,
+    country_id INTEGER NOT NULL REFERENCES dim_countries(country_id),
+    year_id INTEGER NOT NULL REFERENCES dim_years(year_id),
+    operator_id INTEGER NOT NULL REFERENCES dim_operators(operator_id),
+    is_night BOOLEAN NOT NULL DEFAULT TRUE,
+    distance_km DOUBLE PRECISION,
+    co2_emissions DOUBLE PRECISION
+);
+
+CREATE TABLE facts_country_stats (
+    stats_id SERIAL PRIMARY KEY,
+    passengers DOUBLE PRECISION NOT NULL,
+    co2_emissions DOUBLE PRECISION NOT NULL,
+    co2_per_passenger DOUBLE PRECISION NOT NULL,
+    country_id INTEGER NOT NULL REFERENCES dim_countries(country_id),
+    year_id INTEGER NOT NULL REFERENCES dim_years(year_id),
+    UNIQUE (country_id, year_id)
+);
+
+CREATE VIEW dashboard_metrics AS
+SELECT
+    c.country_name,
+    c.country_code,
+    AVG(s.passengers) AS avg_passengers,
+    AVG(s.co2_emissions) AS avg_co2_emissions,
+    AVG(s.co2_per_passenger) AS avg_co2_per_passenger
+FROM facts_country_stats s
+JOIN dim_countries c ON s.country_id = c.country_id
+GROUP BY c.country_id, c.country_name, c.country_code;
+
+-- =========================================================
+-- Index
+-- =========================================================
+
 CREATE INDEX idx_trips_service_type ON trips(service_type);
 CREATE INDEX idx_operators_name ON operators(name);
 CREATE INDEX idx_stations_name ON stations(name);
+
+CREATE INDEX idx_dim_countries_code ON dim_countries(country_code);
+CREATE INDEX idx_dim_years_year ON dim_years(year);
+CREATE INDEX idx_dim_operators_name ON dim_operators(operator_name);
+CREATE INDEX idx_facts_trains_year ON facts_night_trains(year_id);
+CREATE INDEX idx_facts_trains_country ON facts_night_trains(country_id);
+CREATE INDEX idx_facts_trains_operator ON facts_night_trains(operator_id);
+CREATE INDEX idx_facts_stats_year ON facts_country_stats(year_id);
+CREATE INDEX idx_facts_stats_country ON facts_country_stats(country_id);

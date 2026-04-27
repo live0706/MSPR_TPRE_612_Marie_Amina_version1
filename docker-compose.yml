@@ -1,12 +1,10 @@
 services:
-  # --- 1. Base de Données ---
   db:
     image: postgres:15-alpine
     container_name: obrail_db
     restart: always
-    env_file: .env  # Charge tout le fichier
+    env_file: .env
     environment:
-      # L'image Postgres a besoin des variables séparées pour s'initialiser
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
@@ -18,13 +16,12 @@ services:
     ports:
       - "5432:5432"
 
-  # --- 2. ETL ---
   etl:
     build: ./etl
     container_name: obrail_etl
     depends_on:
       - db
-    env_file: .env # Charge DATABASE_URL automatiquement depuis le .env
+    env_file: .env
     environment:
       DATA_DIR: /app/data
       PAN_MAX_FEEDS: 50
@@ -37,7 +34,6 @@ services:
     networks:
       - obrail_net
 
-  # --- 3. API ---
   api:
     build: ./api
     container_name: obrail_api
@@ -46,11 +42,15 @@ services:
       - "8000:8000"
     depends_on:
       - db
-    env_file: .env # Plus besoin de définir environment: DATABASE_URL ici
+    env_file: .env
+    environment:
+      QUALITY_REPORT_PATH: /app/data/processed/quality_report.json
+      MODEL_METRICS_PATH: /app/data/processed/model_metrics.json
+    volumes:
+      - ./data:/app/data
     networks:
       - obrail_net
 
-  # --- 4. Dashboard ---
   dashboard:
     build: ./dashboard
     container_name: obrail_dashboard
@@ -58,11 +58,29 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - db
       - api
     env_file: .env
     environment:
       API_URL: http://api:8000
+    networks:
+      - obrail_net
+
+  dashboard_ai:
+    build: ./dashboard
+    container_name: obrail_dashboard_ai
+    restart: always
+    command: ["streamlit", "run", "app_ai.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8502:8501"
+    depends_on:
+      - api
+    env_file: .env
+    environment:
+      API_URL: http://api:8000
+      MODEL_METRICS_PATH: /app/data/processed/model_metrics.json
+      QUALITY_REPORT_PATH: /app/data/processed/quality_report.json
+    volumes:
+      - ./data:/app/data
     networks:
       - obrail_net
 
