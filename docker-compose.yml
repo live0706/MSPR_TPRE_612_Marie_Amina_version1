@@ -65,24 +65,7 @@ services:
     networks:
       - obrail_net
 
-  dashboard_ai:
-    build: ./dashboard
-    container_name: obrail_dashboard_ai
-    restart: always
-    command: ["streamlit", "run", "app_ai.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    ports:
-      - "8502:8501"
-    depends_on:
-      - api
-    env_file: .env
-    environment:
-      API_URL: http://api:8000
-      MODEL_METRICS_PATH: /app/data/processed/model_metrics.json
-      QUALITY_REPORT_PATH: /app/data/processed/quality_report.json
-    volumes:
-      - ./data:/app/data
-    networks:
-      - obrail_net
+  
 
 volumes:
   postgres_data:

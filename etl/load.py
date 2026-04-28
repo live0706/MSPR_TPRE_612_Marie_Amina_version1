@@ -15,16 +15,81 @@ SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
 RESET_DB = os.getenv("RESET_DB", "true").lower() in ("1", "true", "yes")
 
 COUNTRY_METADATA = {
-    "FR": {"name": "France", "keywords": ["france", "sncf", "transilien", "idf", "ile-de-france", "idfm", "ter", "tgv", "intercites", "ouigo", "ouira", "atoumod", "breizhgo", "nomad", "zou", "mobigo", "remi", "grand est", "hauts-de-france", "occitanie", "bretagne", "normandie", "pays de la loire", "centre-val-de-loire", "aix-marseille", "nouvelle-aquitaine", "auvergne-rhone-alpes", "liO"]},
-    "ES": {"name": "Spain", "keywords": ["spain", "espagne", "renfe", "ave", "madrid", "barcelona", "valencia", "sevilla"]},
-    "IT": {"name": "Italy", "keywords": ["italy", "italie", "trenitalia", "rome", "milan", "venice", "turin", "naples"]},
-    "DE": {"name": "Germany", "keywords": ["germany", "allemagne", "deutsche bahn", "db", "berlin", "munich", "hamburg", "frankfurt", "flixtrain"]},
-    "GB": {"name": "United Kingdom", "keywords": ["united kingdom", "uk", "london", "britain", "eurostar international"]},
-    "BE": {"name": "Belgium", "keywords": ["belgium", "belgique", "brussels", "bruxelles"]},
-    "NL": {"name": "Netherlands", "keywords": ["netherlands", "pays-bas", "amsterdam", "rotterdam"]},
-    "CH": {"name": "Switzerland", "keywords": ["switzerland", "suisse", "zurich", "geneva", "lausanne", "cff", "sbb"]},
+    "AT": {"name": "Austria", "keywords": ["austria", "autriche", "osterreich", "oebb", "obb", "vienna", "wien"]},
+    "BE": {"name": "Belgium", "keywords": ["belgium", "belgique", "sncb", "nmbs", "brussels", "bruxelles"]},
+    "BG": {"name": "Bulgaria", "keywords": ["bulgaria", "bulgarie", "bdz", "sofia"]},
+    "CH": {"name": "Switzerland", "keywords": ["switzerland", "suisse", "schweiz", "sbb", "cff", "zurich", "geneva", "lausanne"]},
+    "CZ": {"name": "Czech Republic", "keywords": ["czech republic", "republique tcheque", "cesko", "cd rail", "ceske drahy", "prague"]},
+    "DE": {"name": "Germany", "keywords": ["germany", "allemagne", "deutschland", "deutsche bahn", "db", "berlin", "munich", "hamburg", "frankfurt", "flixtrain"]},
+    "DK": {"name": "Denmark", "keywords": ["denmark", "danemark", "dsb", "copenhagen", "kobenhavn"]},
+    "EE": {"name": "Estonia", "keywords": ["estonia", "estonie", "elron", "tallinn"]},
+    "ES": {"name": "Spain", "keywords": ["spain", "espagne", "espana", "renfe", "ave", "madrid", "barcelona", "sevilla", "valencia"]},
+    "FI": {"name": "Finland", "keywords": ["finland", "finlande", "vr", "helsinki"]},
+    "FR": {"name": "France", "keywords": ["france", "sncf", "transilien", "idf", "ile-de-france", "idfm", "ter", "tgv", "intercites", "ouigo", "atoumod", "breizhgo", "nomad", "zou", "mobigo", "remi", "grand est", "hauts-de-france", "occitanie", "bretagne", "normandie", "pays de la loire", "centre-val-de-loire", "nouvelle-aquitaine", "auvergne-rhone-alpes", "lio"]},
+    "GB": {"name": "United Kingdom", "keywords": ["united kingdom", "uk", "great britain", "britain", "england", "scotland", "wales", "london", "avanti", "lner", "gwr", "eurostar international"]},
+    "GR": {"name": "Greece", "keywords": ["greece", "grece", "hellas", "ose", "athens", "thessaloniki"]},
+    "HR": {"name": "Croatia", "keywords": ["croatia", "croatie", "hzpp", "zagreb"]},
+    "HU": {"name": "Hungary", "keywords": ["hungary", "hongrie", "mav", "budapest"]},
+    "IE": {"name": "Ireland", "keywords": ["ireland", "irlande", "irish rail", "iarnrod eireann", "dublin"]},
+    "IT": {"name": "Italy", "keywords": ["italy", "italie", "italia", "trenitalia", "italo", "rome", "milan", "venice", "turin", "naples"]},
+    "LT": {"name": "Lithuania", "keywords": ["lithuania", "lituanie", "ltg", "vilnius"]},
+    "LU": {"name": "Luxembourg", "keywords": ["luxembourg", "cfl", "luxemburg"]},
+    "LV": {"name": "Latvia", "keywords": ["latvia", "lettonie", "pasa ieru vilciens", "riga"]},
+    "NL": {"name": "Netherlands", "keywords": ["netherlands", "pays-bas", "nederland", "ns", "amsterdam", "rotterdam", "utrecht"]},
+    "NO": {"name": "Norway", "keywords": ["norway", "norvege", "vy", "oslo"]},
+    "PL": {"name": "Poland", "keywords": ["poland", "pologne", "pkp", "warsaw", "warszawa", "intercity polska"]},
+    "PT": {"name": "Portugal", "keywords": ["portugal", "cp", "comboios", "lisbon", "lisboa", "porto"]},
+    "RO": {"name": "Romania", "keywords": ["romania", "roumanie", "cfr", "bucharest", "bucuresti"]},
+    "RS": {"name": "Serbia", "keywords": ["serbia", "serbie", "srbija voz", "beograd", "belgrade"]},
+    "SE": {"name": "Sweden", "keywords": ["sweden", "suede", "sj", "stockholm", "snalltaget"]},
+    "SI": {"name": "Slovenia", "keywords": ["slovenia", "slovenie", "sz", "slovenske zeleznice", "ljubljana"]},
+    "SK": {"name": "Slovakia", "keywords": ["slovakia", "slovaquie", "zssk", "bratislava"]},
     "ZZ": {"name": "Unknown", "keywords": []},
 }
+
+COUNTRY_ALIASES = {
+    "autriche": "AT",
+    "osterreich": "AT",
+    "belgique": "BE",
+    "bulgarie": "BG",
+    "suisse": "CH",
+    "schweiz": "CH",
+    "republique tcheque": "CZ",
+    "czechia": "CZ",
+    "allemagne": "DE",
+    "danemark": "DK",
+    "estonie": "EE",
+    "espagne": "ES",
+    "espana": "ES",
+    "finlande": "FI",
+    "france": "FR",
+    "united kingdom": "GB",
+    "great britain": "GB",
+    "britain": "GB",
+    "england": "GB",
+    "scotland": "GB",
+    "wales": "GB",
+    "uk": "GB",
+    "grece": "GR",
+    "croatie": "HR",
+    "hongrie": "HU",
+    "irlande": "IE",
+    "italie": "IT",
+    "italia": "IT",
+    "lituanie": "LT",
+    "lettonie": "LV",
+    "pays-bas": "NL",
+    "norvege": "NO",
+    "pologne": "PL",
+    "roumanie": "RO",
+    "serbie": "RS",
+    "suede": "SE",
+    "slovenie": "SI",
+    "slovaquie": "SK",
+}
+
+for _country_code, _metadata in COUNTRY_METADATA.items():
+    COUNTRY_ALIASES.setdefault(_metadata["name"].lower(), _country_code)
 
 
 def _safe_text(value):
@@ -282,14 +347,41 @@ def _country_name_from_code(country_code):
     return COUNTRY_METADATA.get(country_code, COUNTRY_METADATA["ZZ"])["name"]
 
 
+def _normalize_country_code(value):
+    normalized = _normalize_name(value)
+    if normalized is None:
+        return None
+
+    upper_value = normalized.upper()
+    if upper_value in COUNTRY_METADATA:
+        return upper_value
+
+    return COUNTRY_ALIASES.get(normalized.lower())
+
+
+def _country_name_from_value(value):
+    country_code = _normalize_country_code(value)
+    if country_code:
+        return _country_name_from_code(country_code)
+    return _normalize_name(value)
+
+
 def _infer_country_code(row):
+    for direct_key in ("country_code", "country", "source_country", "operator_country", "origin_country", "destination_country"):
+        normalized_country = _normalize_country_code(row.get(direct_key))
+        if normalized_country:
+            return normalized_country
+
     raw_chunks = [
         row.get("source_key"),
         row.get("source_name"),
         row.get("source_provider"),
         row.get("operator_name"),
+        row.get("operator_country"),
         row.get("origin_city"),
+        row.get("origin_country"),
         row.get("destination_city"),
+        row.get("destination_country"),
     ]
     haystack = " ".join(str(chunk).lower() for chunk in raw_chunks if chunk)
 
@@ -346,8 +438,11 @@ def _load_analytic_layer(engine):
             t.co2_emissions,
             r.distance_km,
             o.name AS operator_name,
+            o.country AS operator_country,
             so.name AS origin_city,
+            so.country AS origin_country,
             sd.name AS destination_city,
+            sd.country AS destination_country,
             s.source_key,
             s.name AS source_name,
             s.provider AS source_provider
@@ -532,6 +627,7 @@ def run_load(data):
         src.get("id"): {
             "source_name": src.get("description"),
             "source_provider": _provider_to_text(src.get("provider")),
+            "source_country": src.get("country"),
         }
         for src in sources_list
     }
@@ -541,10 +637,37 @@ def run_load(data):
     df_to_load["source_provider"] = df_to_load["source_origin"].map(
         lambda key: source_metadata_map.get(key, {}).get("source_provider")
     )
-    df_to_load["country_code"] = df_to_load.apply(_infer_country_code, axis=1)
+    df_to_load["source_country"] = df_to_load["source_origin"].map(
+        lambda key: source_metadata_map.get(key, {}).get("source_country")
+    )
+
+    country_code_series = pd.Series(index=df_to_load.index, dtype="object")
+    for column in ("country_code", "country", "source_country"):
+        if column in df_to_load.columns:
+            country_code_series = country_code_series.fillna(df_to_load[column].map(_normalize_country_code))
+
+    df_to_load["country_code"] = country_code_series
+    missing_country_mask = df_to_load["country_code"].isna()
+    if missing_country_mask.any():
+        df_to_load.loc[missing_country_mask, "country_code"] = df_to_load.loc[missing_country_mask].apply(
+            _infer_country_code,
+            axis=1,
+        )
+    df_to_load["country_code"] = df_to_load["country_code"].fillna("ZZ")
     df_to_load["country_name"] = df_to_load["country_code"].map(_country_name_from_code)
-    df_to_load["origin_country"] = df_to_load["country_name"]
-    df_to_load["destination_country"] = df_to_load["country_name"]
+
+    if "origin_country" in df_to_load.columns:
+        df_to_load["origin_country"] = df_to_load["origin_country"].map(_country_name_from_value)
+    else:
+        df_to_load["origin_country"] = None
+
+    if "destination_country" in df_to_load.columns:
+        df_to_load["destination_country"] = df_to_load["destination_country"].map(_country_name_from_value)
+    else:
+        df_to_load["destination_country"] = None
+
+    df_to_load["origin_country"] = df_to_load["origin_country"].fillna(df_to_load["country_name"])
+    df_to_load["destination_country"] = df_to_load["destination_country"].fillna(df_to_load["country_name"])
 
     try:
         ingestions_df = df_to_load.groupby("source_origin", dropna=False).size().reset_index(name="row_count")

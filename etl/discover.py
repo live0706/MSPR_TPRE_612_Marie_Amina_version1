@@ -1,349 +1,244 @@
-import requests
 import json
-import os
 import logging
+import os
+import re
 
-# --- CONFIGURATION ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import requests
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# C'est ici qu'on va Ã©crire le rÃ©sultat
-OUTPUT_FILE = os.path.join(BASE_DIR, 'sources.json')
-STATIC_SOURCES_FILE = os.path.join(BASE_DIR, 'sources_static.json')
+OUTPUT_FILE = os.path.join(BASE_DIR, "sources.json")
+STATIC_SOURCES_FILE = os.path.join(BASE_DIR, "sources_static.json")
 
-# Le Hub Open Data Mondial (inclut toute l'Europe)
-CATALOG_API = "https://data.opendatasoft.com/api/v2/catalog/datasets"
 TRANSITLAND_REST_URL = os.getenv("TRANSITLAND_REST_URL", "https://transit.land/api/v2/rest/feeds")
-TRANSITLAND_ENABLED = os.getenv("TRANSITLAND_ENABLED", "true").lower() in ("1", "true", "yes")
-TRANSITLAND_PER_PAGE = int(os.getenv("TRANSITLAND_PER_PAGE", "500"))
-TRANSITLAND_MAX_FEEDS = int(os.getenv("TRANSITLAND_MAX_FEEDS", "0")) or None
-TRANSITLAND_LICENSE = os.getenv("TRANSITLAND_LICENSE", "exclude_no")
+TRANSITLAND_PER_PAGE = max(25, int(os.getenv("TRANSITLAND_PER_PAGE", "100")))
+TRANSITLAND_MAX_PAGES = max(1, int(os.getenv("TRANSITLAND_MAX_PAGES", "3")))
+TRANSITLAND_TIMEOUT = int(os.getenv("TRANSITLAND_TIMEOUT", "45"))
 
-# PAN (transport.data.gouv.fr) API
-PAN_API_URL = os.getenv("PAN_API_URL", "https://transport.data.gouv.fr/api/datasets")
-PAN_MAX_FEEDS = int(os.getenv("PAN_MAX_FEEDS", "50"))
-PAN_ONLY_GTFS = os.getenv("PAN_ONLY_GTFS", "true").lower() in ("1", "true", "yes")
-PAN_ONLY_RAIL = os.getenv("PAN_ONLY_RAIL", "true").lower() in ("1", "true", "yes")
+EUROPE_COUNTRIES = [
+    "AT", "BE", "BG", "CH", "CZ", "DE", "DK", "EE", "ES", "FI",
+    "FR", "GB", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV",
+    "NL", "NO", "PL", "PT", "RO", "RS", "SE", "SI", "SK",
+]
+
+RAIL_KEYWORDS = [
+    "rail", "railway", "train", "trains", "night train", "nightjet", "sleeper",
+    "bahn", "db", "oebb", "obb", "sncf", "renfe", "trenitalia", "cff", "sbb",
+    "railteam", "intercity", "eurostar", "thalys", "rail shuttle", "railway service",
+    "ferroviaire", "ferroviario", "ferrocarril", "ferrovie", "helsinki train",
+]
 
 
-def _clean_id(value: str) -> str:
+def _clean_id(value):
     if not value:
-        return "unknown"
-    return (
-        str(value)
-        .replace("@", "_")
-        .replace(".", "_")
-        .replace("-", "_")
-        .replace(" ", "_")
-        .lower()
-    )
+        return "unknown_source"
+    return re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_") or "unknown_source"
 
 
-def _resource_url(resource: dict):
-    for key in ["download_url", "url", "original_url", "file", "href"]:
-        val = resource.get(key)
-        if isinstance(val, str) and val:
-            return val
+def _safe_json_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _extract_feed_url(feed):
+    urls = feed.get("urls") or {}
+    if isinstance(urls, dict):
+        for key in ("static_historic", "static_current", "static_planned"):
+            value = urls.get(key)
+            if isinstance(value, list) and value:
+                return value[0]
+            if isinstance(value, str) and value:
+                return value
+    direct_url = feed.get("url")
+    if isinstance(direct_url, str) and direct_url:
+        return direct_url
     return None
 
 
-def _is_gtfs_resource(resource: dict):
-    fmt = str(resource.get("format", "")).lower()
-    rtype = str(resource.get("type", "")).lower()
-    mime = str(resource.get("mime", "")).lower()
-    url = str(_resource_url(resource) or "").lower()
-    # Exclude GTFS-RT / realtime endpoints (not zip)
-    for val in (fmt, rtype, mime, url):
-        if "gtfs-rt" in val or "gtfs_rt" in val or "gtfsrt" in val or "realtime" in val or "real-time" in val:
-            return False
-    if "gtfs" in fmt or "gtfs" in rtype or "gtfs" in mime:
-        return True
-    if url.endswith(".zip") and ("gtfs" in url or "gtfs-" in url):
-        return True
-    return False
+def _feed_haystack(feed):
+    keys = [
+        "id",
+        "onestop_id",
+        "name",
+        "feed_name",
+        "description",
+        "spec",
+        "operators",
+        "provider",
+        "license",
+        "urls",
+    ]
+    return " ".join(_safe_json_text(feed.get(key)) for key in keys if feed.get(key) is not None).lower()
 
 
-def _looks_rail_dataset(dataset: dict):
-    if not PAN_ONLY_RAIL:
-        return True
-    modes = dataset.get("modes") or dataset.get("transport_modes") or dataset.get("transport_mode") or []
-    if isinstance(modes, str):
-        modes = [modes]
-    modes = [str(m).lower() for m in modes]
-    if any(m in ["rail", "train", "fer", "railway"] for m in modes):
-        return True
-    tags = dataset.get("tags") or []
-    if isinstance(tags, str):
-        tags = [tags]
-    tags = [str(t).lower() for t in tags]
-    if any(t in ["rail", "railway", "train", "fer", "ferroviaire"] for t in tags):
-        return True
-    # Si on n'a pas d'info, on garde pour ne pas rater des feeds rail
-    return True
-
-
-def find_pan_gtfs_feeds():
-    """
-    Récupère les datasets PAN (transport.data.gouv.fr) et extrait les ressources GTFS.
-    """
-    feeds = []
-    seen_urls = set()
-
-    try:
-        logger.info("📡 Récupération du catalogue PAN (transport.data.gouv.fr)...")
-        response = requests.get(PAN_API_URL, timeout=60)
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as e:
-        logger.error(f"❌ Erreur PAN API: {e}")
-        return feeds
-
-    datasets = payload
-    if isinstance(payload, dict):
-        datasets = (
-            payload.get("datasets")
-            or payload.get("data")
-            or payload.get("items")
-            or []
-        )
-
-    if not isinstance(datasets, list):
-        logger.error("❌ Format PAN inattendu (datasets non-list).")
-        return feeds
-
-    for dataset in datasets:
-        if not isinstance(dataset, dict):
-            continue
-        if not _looks_rail_dataset(dataset):
-            continue
-
-        resources = dataset.get("resources") or dataset.get("dataset_resources") or []
-        if not isinstance(resources, list):
-            continue
-
-        for res in resources:
-            if not isinstance(res, dict):
-                continue
-            if PAN_ONLY_GTFS and not _is_gtfs_resource(res):
-                continue
-
-            url = _resource_url(res)
-            if not url or url in seen_urls:
-                continue
-
-            ds_id = dataset.get("id") or dataset.get("dataset_id") or dataset.get("slug") or dataset.get("name")
-            res_id = res.get("id") or res.get("resource_id") or res.get("name")
-            clean_id = _clean_id(f"pan_{ds_id}_{res_id}")
-            title = dataset.get("title") or dataset.get("name") or ds_id or "PAN GTFS"
-            provider = dataset.get("publisher") or dataset.get("organisation") or dataset.get("organization")
-            license_name = dataset.get("license") or dataset.get("licence")
-
-            feeds.append({
-                "id": clean_id,
-                "type": "gtfs",
-                "description": f"PAN GTFS: {title}",
-                "url": url,
-                "provider": provider,
-                "license": license_name,
-            })
-            seen_urls.add(url)
-
-            if PAN_MAX_FEEDS and len(feeds) >= PAN_MAX_FEEDS:
-                return feeds
-
-    return feeds
-
-
-def find_european_datasets(keyword, limit=2):
-    """
-    Interroge le Hub OpenDataSoft pour trouver des datasets ferroviaires (API JSON).
-    """
-    params = {
-        'search': keyword,
-        'limit': limit,
-        # On peut filtrer pour exclure la France si on veut forcer l'aspect "Europe"
-        # 'refine.country': 'DE' (Allemagne), etc.
-    }
-    
-    discovered_sources = []
-    
-    try:
-        logger.info(f"ðŸŒ Recherche catalogue Europe pour : '{keyword}'...")
-        response = requests.get(CATALOG_API, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        for item in data.get('datasets', []):
-            ds = item.get('dataset', {})
-            ds_id = ds.get('dataset_id')
-            title = ds.get('metas', {}).get('default', {}).get('title', ds_id)
-            
-            # Construction de l'URL API V1 (Format standard JSON)
-            # Cette URL renvoie toujours du JSON propre, peu importe le format d'origine
-            api_url = f"https://data.opendatasoft.com/api/records/1.0/search/?dataset={ds_id}&rows=50"
-            
-            # Nettoyage de l'ID pour qu'il soit un nom de fichier valide
-            clean_id = ds_id.replace('@', '_').replace('.', '_').replace('-', '_')
-            
-            discovered_sources.append({
-                "id": clean_id,
-                "type": "json",  # On force le type JSON car on utilise l'API
-                "description": f"Auto-discovered: {title}",
-                "url": api_url
-            })
-            
-    except Exception as e:
-        logger.error(f"âŒ Erreur dÃ©couverte : {e}")
-        
-    return discovered_sources
+def _looks_like_rail_feed(feed):
+    haystack = _feed_haystack(feed)
+    return any(keyword in haystack for keyword in RAIL_KEYWORDS)
 
 
 def load_static_sources():
     if not os.path.exists(STATIC_SOURCES_FILE):
         return []
+
     try:
-        with open(STATIC_SOURCES_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, list):
-            return []
-        valid = []
-        for src in data:
-            if not isinstance(src, dict):
-                continue
-            if src.get("enabled", True) and src.get("url"):
-                valid.append(src)
-        return valid
-    except Exception as e:
-        logger.error(f"âŒ Erreur lecture sources_static.json : {e}")
+        with open(STATIC_SOURCES_FILE, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception as exc:
+        logger.error(f"Impossible de lire sources_static.json : {exc}")
         return []
 
-
-def _extract_transitland_url(feed):
-    urls = feed.get("urls") or {}
-    if isinstance(urls, dict):
-        for key in ["static_current", "static_historic", "static_planned"]:
-            val = urls.get(key)
-            if isinstance(val, list) and val:
-                return val[0]
-            if isinstance(val, str) and val:
-                return val
-    if isinstance(feed.get("url"), str):
-        return feed.get("url")
-    return None
-
-
-def find_transitland_gtfs_feeds():
-    if not TRANSITLAND_ENABLED:
+    if not isinstance(data, list):
         return []
 
-    feeds = []
+    valid_sources = []
+    for source in data:
+        if not isinstance(source, dict):
+            continue
+        if source.get("enabled") is False or not source.get("url"):
+            continue
+        source.setdefault("id", _clean_id(source.get("description") or source.get("url")))
+        source.setdefault("type", "gtfs")
+        source.setdefault("enabled", True)
+        valid_sources.append(source)
+    return valid_sources
+
+
+def discover_transitland_country(country_code):
+    discovered = []
     seen_urls = set()
-    offset = 0
 
-    while True:
+    for page_idx in range(TRANSITLAND_MAX_PAGES):
         params = {
             "spec": "gtfs",
-            "license_redistribution_allowed": TRANSITLAND_LICENSE,
+            "geographical_area": country_code,
             "per_page": TRANSITLAND_PER_PAGE,
-            "offset": offset,
+            "offset": page_idx * TRANSITLAND_PER_PAGE,
         }
+
         try:
-            response = requests.get(TRANSITLAND_REST_URL, params=params, timeout=30)
+            response = requests.get(TRANSITLAND_REST_URL, params=params, timeout=TRANSITLAND_TIMEOUT)
             response.raise_for_status()
             payload = response.json()
-        except Exception as e:
-            logger.error(f"âŒ Erreur Transitland : {e}")
+        except Exception as exc:
+            logger.error(f"Erreur Transitland sur {country_code} page {page_idx + 1}: {exc}")
             break
 
-        items = (
+        feeds = (
             payload.get("feeds")
             or payload.get("results")
             or payload.get("data")
             or payload.get("items")
             or []
         )
-        if not items:
+        if not feeds:
             break
 
-        for feed in items:
-            url = _extract_transitland_url(feed)
+        kept_this_page = 0
+        for feed in feeds:
+            if not isinstance(feed, dict):
+                continue
+
+            url = _extract_feed_url(feed)
             if not url or url in seen_urls:
                 continue
-            feed_id = feed.get("onestop_id") or feed.get("id") or f"transitland_{len(feeds) + 1}"
-            feeds.append(
+            if not _looks_like_rail_feed(feed):
+                continue
+
+            source_id = _clean_id(
+                feed.get("onestop_id")
+                or feed.get("id")
+                or f"transitland_{country_code}_{len(discovered) + 1}"
+            )
+            description = (
+                feed.get("name")
+                or feed.get("feed_name")
+                or feed.get("description")
+                or f"Transitland rail feed {country_code}"
+            )
+
+            discovered.append(
                 {
-                    "id": f"transitland_{feed_id}",
+                    "id": source_id,
                     "type": "gtfs",
-                    "description": "Transitland GTFS feed",
+                    "description": description,
                     "url": url,
+                    "provider": feed.get("provider") or feed.get("operators") or feed.get("feed_publisher_name"),
+                    "license": feed.get("license") or feed.get("license_name"),
+                    "country": country_code,
+                    "enabled": True,
                 }
             )
             seen_urls.add(url)
+            kept_this_page += 1
 
-            if TRANSITLAND_MAX_FEEDS and len(feeds) >= TRANSITLAND_MAX_FEEDS:
-                return feeds
+        logger.info("%s page %s : %s feeds rail retenus", country_code, page_idx + 1, kept_this_page)
 
-        if len(items) < TRANSITLAND_PER_PAGE:
+        if len(feeds) < TRANSITLAND_PER_PAGE:
             break
-        offset += TRANSITLAND_PER_PAGE
 
-    return feeds
+    return discovered
 
 
-def update_sources_file():
-    """
-    CrÃ©e le fichier sources.json en combinant :
-    1. Des sources STATIQUES (WikipÃ©dia, pour la fiabilitÃ©)
-    2. Des sources DYNAMIQUES (API, pour la note technique)
-    3. Des sources STATIQUES additionnelles (fichier local)
-    """
-    logger.info("ðŸ¤– GÃ©nÃ©ration du fichier de configuration sources.json...")
-    
-    final_list = []
-    
-    # --- A. SOURCES STATIQUES (Toujours lÃ ) ---
-    final_list.append({
-        "id": "wiki_named_trains",
-        "type": "html",
-        "description": "Wikipedia Named Passenger Trains",
-        "url": "https://en.wikipedia.org/wiki/List_of_named_passenger_trains_of_Europe"
-    })
-    
-    # --- B. SOURCES DYNAMIQUES (Recherche Live - Opendatasoft) ---
-    # 1. On cherche des gares en Europe
-    stations = find_european_datasets("european train stations", limit=1)
-    final_list.extend(stations)
-    
-    # 2. On cherche des donnÃ©es d'Ã©missions ou de trafic
-    emissions = find_european_datasets("railway emissions", limit=1)
-    final_list.extend(emissions)
+def _deduplicate_sources(sources):
+    deduplicated = []
+    seen_urls = set()
+    seen_ids = set()
 
-    # --- C. SOURCES GTFS (PAN) ---
-    pan_feeds = find_pan_gtfs_feeds()
-    final_list.extend(pan_feeds)
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        url = source.get("url")
+        source_id = source.get("id")
+        if not url or url in seen_urls or source_id in seen_ids:
+            continue
+        deduplicated.append(source)
+        seen_urls.add(url)
+        seen_ids.add(source_id)
 
-    # --- D. SOURCES GTFS (Transitland) ---
-    transitland_feeds = find_transitland_gtfs_feeds()
-    final_list.extend(transitland_feeds)
+    return deduplicated
 
-    # --- E. SOURCES STATIQUES SUPPLEMENTAIRES ---
+
+def discover_massive_europe():
+    logger.info("Debut de la prospection ferroviaire europeenne elargie...")
+
+    all_sources = []
+    for country_code in EUROPE_COUNTRIES:
+        country_sources = discover_transitland_country(country_code)
+        all_sources.extend(country_sources)
+        logger.info(
+            "OK %s : %s feeds rail ajoutes, %s sources cumulees",
+            country_code,
+            len(country_sources),
+            len(all_sources),
+        )
+
     static_sources = load_static_sources()
-    final_list.extend(static_sources)
-    
-    # --- E. ECRITURE SUR DISQUE ---
-    try:
-        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(final_list, f, indent=2, ensure_ascii=False)
-        logger.info(f"ðŸ’¾ SuccÃ¨s ! {len(final_list)} sources enregistrÃ©es dans sources.json")
-        
-        # Petit affichage pour le debug
-        for src in final_list:
-            logger.info(f"   - [Source] {src['id']}")
-            
-    except Exception as e:
-        logger.error(f"âŒ Impossible d'Ã©crire le fichier JSON : {e}")
+    if static_sources:
+        logger.info("%s sources statiques ajoutees", len(static_sources))
+        all_sources.extend(static_sources)
+
+    final_sources = _deduplicate_sources(all_sources)
+    final_sources = sorted(
+        final_sources,
+        key=lambda source: (
+            source.get("country") or "ZZ",
+            source.get("description") or source.get("id") or "",
+        ),
+    )
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as handle:
+        json.dump(final_sources, handle, indent=2, ensure_ascii=False)
+
+    logger.info("Termine : %s sources europeennes ecrites dans %s", len(final_sources), OUTPUT_FILE)
 
 
 if __name__ == "__main__":
-    update_sources_file()
+    discover_massive_europe()

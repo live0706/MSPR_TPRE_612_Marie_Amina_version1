@@ -1,176 +1,175 @@
-﻿import pandas as pd
-import requests
-import os
 import json
 import logging
+import os
+import re
 import zipfile
-from datetime import datetime
-from io import StringIO  # NÃƒÂ©cessaire pour corriger le FutureWarning
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import requests
 
 from gtfs import parse_gtfs_zip
 
-# --- CONFIGURATION ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR") or os.path.abspath(os.path.join(BASE_DIR, "..", "data"))
 DATA_RAW_DIR = os.path.join(DATA_DIR, "raw")
-SOURCE_FILE = os.path.join(BASE_DIR, 'sources.json')
+SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
+
+DEFAULT_TIMEOUT = int(os.getenv("EXTRACT_TIMEOUT", "90"))
+DEFAULT_MAX_WORKERS = max(2, int(os.getenv("EXTRACT_MAX_WORKERS", "8")))
+CHUNK_SIZE = 65536
+HEADERS = {"User-Agent": "ObRail/1.0"}
 
 os.makedirs(DATA_RAW_DIR, exist_ok=True)
 
 
+def _sanitize_filename(value):
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("._") or "source"
+
+
+def _source_url(source):
+    url = source.get("url")
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    return None
+
+
 class UniversalFetcher:
-    def __init__(self, config_path):
-        self.config_path = config_path
+    def __init__(self, config_path=SOURCE_FILE, max_workers=None, request_timeout=None):
+        self.config_path = config_path or SOURCE_FILE
+        self.max_workers = max_workers or DEFAULT_MAX_WORKERS
+        self.request_timeout = request_timeout or DEFAULT_TIMEOUT
 
     def load_config(self):
         if not os.path.exists(self.config_path):
-            logger.error(f"Ã¢ÂÅ’ Config file not found: {self.config_path}")
+            logger.error(f"Configuration introuvable : {self.config_path}")
             return []
-        with open(self.config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
 
-    def download_resource(self, url, source_id, file_type):
-        timestamp = datetime.now().strftime('%Y%m%d')
-        ext = "zip" if file_type == "gtfs" else file_type
-        filename = f"{source_id}_{timestamp}.{ext}"
-        file_path = os.path.join(DATA_RAW_DIR, filename)
-        
-        # Si le fichier existe dÃƒÂ©jÃƒÂ , on ne le re-tÃƒÂ©lÃƒÂ©charge pas (gain de temps pour les tests)
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception as exc:
+            logger.error(f"Lecture config impossible : {exc}")
+            return []
+
+        if not isinstance(data, list):
+            return []
+
+        return [
+            source
+            for source in data
+            if isinstance(source, dict)
+            and source.get("enabled") is not False
+            and _source_url(source)
+            and source.get("type", "gtfs") == "gtfs"
+        ]
+
+    def _target_path(self, source):
+        source_id = _sanitize_filename(source.get("id") or "unknown_source")
+        return os.path.join(DATA_RAW_DIR, f"{source_id}.zip")
+
+    def _download_gtfs(self, source):
+        file_path = self._target_path(source)
+        temp_path = f"{file_path}.part"
+
         if os.path.exists(file_path):
-            if file_type == "gtfs" and not zipfile.is_zipfile(file_path):
-                logger.warning(f"GTFS file not a valid zip on disk, re-downloading: {filename}")
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-            else:
-                logger.info(f"ðŸ“‚ File already exists, skipping download: {filename}")
+            if zipfile.is_zipfile(file_path):
                 return file_path
+            logger.warning(f"Archive invalide detectee, retelechargement : {os.path.basename(file_path)}")
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
+        url = _source_url(source)
+        if not url:
+            raise ValueError("URL de source manquante")
+
+        last_error = None
+        for attempt in range(1, 3):
+            try:
+                with requests.get(url, headers=HEADERS, timeout=self.request_timeout, stream=True) as response:
+                    response.raise_for_status()
+                    with open(temp_path, "wb") as handle:
+                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                            if chunk:
+                                handle.write(chunk)
+
+                if not zipfile.is_zipfile(temp_path):
+                    raise ValueError("Le fichier telecharge n'est pas une archive GTFS valide")
+
+                os.replace(temp_path, file_path)
+                return file_path
+            except Exception as exc:
+                last_error = exc
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                logger.warning(
+                    "%s tentative %s/2 en echec : %s",
+                    source.get("id", "unknown_source"),
+                    attempt,
+                    exc,
+                )
+
+        raise last_error or RuntimeError("Echec du telechargement GTFS")
+
+    def process_one_source(self, source):
+        source_id = source.get("id", "unknown_source")
         try:
-            logger.info(f"â¬‡ï¸ Downloading: {source_id} from {url}...")
-            # On ajoute un User-Agent pour ne pas ÃƒÂªtre bloquÃƒÂ© par WikipÃƒÂ©dia
-            headers = {'User-Agent': 'Mozilla/5.0 (ObRail Project)'}
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            
-            with open(file_path, 'wb') as f:
-                f.write(response.content)
-
-            # Validate GTFS zip integrity to avoid GTFS-RT or non-zip files
-            if file_type == "gtfs" and not zipfile.is_zipfile(file_path):
-                logger.warning(f"GTFS file is not a valid zip: {filename}")
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
+            file_path = self._download_gtfs(source)
+            df = parse_gtfs_zip(file_path)
+            if df is None or df.empty:
+                logger.info(f"INFO {source_id}: aucun trajet rail exploitable")
                 return None
-            
-            logger.info(f"âœ… Saved to: {filename}")
-            return file_path
-        except Exception as e:
-            logger.error(f"âš ï¸ Failed to download {source_id}: {e}")
+
+            working_df = df.copy()
+            working_df["source_origin"] = source_id
+            working_df["country"] = source.get("country")
+            working_df["source_name"] = source.get("description")
+            working_df["source_provider"] = source.get("provider")
+            working_df["source_license"] = source.get("license")
+
+            working_df.attrs["source_id"] = source_id
+            working_df.attrs["country"] = source.get("country")
+            working_df.attrs["source_name"] = source.get("description")
+            working_df.attrs["source_provider"] = source.get("provider")
+            working_df.attrs["source_license"] = source.get("license")
+
+            logger.info(f"OK {source_id}: {len(working_df)} trajets rail extraits")
+            return working_df
+        except Exception as exc:
+            logger.error(f"ERREUR {source_id}: {exc}")
             return None
-
-    def parse_content(self, file_path, file_type, separator=','):
-        if not file_path:
-            return pd.DataFrame()
-
-        try:
-            # 1. Handle CSV (Fix DtypeWarning)
-            if file_type == 'csv':
-                return pd.read_csv(file_path, sep=separator, on_bad_lines='skip', low_memory=False)
-
-            # 2. Handle JSON
-            elif file_type == 'json':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                if isinstance(data, list):
-                    return pd.DataFrame(data)
-                
-                for key in ['records', 'journeys', 'data', 'fields', 'results']:
-                    if key in data and isinstance(data[key], list):
-                        return pd.json_normalize(data[key])
-                return pd.json_normalize(data)
-
-            # 3. Handle HTML (Mise ÃƒÂ  jour pour WikipÃƒÂ©dia "Named Trains")
-            elif file_type == 'html':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    html_content = f.read()
-                
-                html_buffer = StringIO(html_content)
-                # On cherche un tableau contenant "Endpoints" ou "Train"
-                tables = pd.read_html(html_buffer, match='Endpoints')
-                
-                if tables:
-                    df = tables[0]
-                    # Nettoyage des noms de colonnes (minuscules, sans espaces)
-                    df.columns = [c.lower().replace(' ', '_') for c in df.columns]
-                    
-                    # Mapping pour aider transform.py
-                    # La colonne "endpoints" contient "Paris Ã¢â‚¬â€œ Nice"
-                    # On la renomme en 'origin_city' pour qu'elle soit capturÃƒÂ©e,
-                    # le split se fera dans transform.py
-                    rename_map = {}
-                    for col in df.columns:
-                        if 'train' in col:
-                            rename_map[col] = 'agency_name'
-                        if 'endpoints' in col:
-                            rename_map[col] = 'origin_city'  # Astuce temporaire
-                        if 'operator' in col:
-                            rename_map[col] = 'operator_name'
-                    
-                    df = df.rename(columns=rename_map)
-                    df['service_type'] = 'Nuit'  # HypothÃƒÂ¨se par dÃƒÂ©faut pour l'exercice
-                    return df
-                else:
-                    logger.warning(f"No tables found in {file_path}")
-                    return pd.DataFrame()
-
-            # 4. Handle GTFS (ZIP)
-            elif file_type == 'gtfs':
-                if not zipfile.is_zipfile(file_path):
-                    logger.warning(f"GTFS file not a zip: {file_path}")
-                    return pd.DataFrame()
-                return parse_gtfs_zip(file_path)
-
-        except Exception as e:
-            logger.error(f"Ã¢ÂÅ’ Error parsing {file_path}: {e}")
-            return pd.DataFrame()
 
     def run(self):
         sources = self.load_config()
-        extracted_data = []
+        if not sources:
+            logger.warning("Aucune source GTFS active a extraire")
+            return []
 
-        logger.info(f"ðŸš€ Starting Extraction for {len(sources)} sources...")
+        logger.info(f"Extraction parallele lancee sur {len(sources)} sources GTFS")
 
-        for source in sources:
-            if source.get("enabled", True) is False:
-                logger.info(f"Skipping disabled source: {source.get('id')}")
-                continue
-            src_url = source.get('url')
-            src_type = source.get('type')
-            src_id = source.get('id', 'unknown')
-            src_sep = source.get('separator', ',') 
+        all_dfs = []
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(self.process_one_source, source): source for source in sources}
+            for future in as_completed(futures):
+                result = future.result()
+                if result is not None and not result.empty:
+                    all_dfs.append(result)
 
-            local_path = self.download_resource(src_url, src_id, src_type)
-            df = self.parse_content(local_path, src_type, src_sep)
-            
-            if not df.empty:
-                df['source_origin'] = src_id
-                df.attrs["source_id"] = src_id
-                extracted_data.append(df)
-                logger.info(f"ðŸ“Š {src_id}: {len(df)} rows extracted.")
-            else:
-                logger.warning(f"âš ï¸ {src_id}: Empty or unreadable.")
+        logger.info(f"Extraction terminee : {len(all_dfs)} sources GTFS exploitables")
+        return all_dfs
 
-        return extracted_data
+
+class MassiveFetcher(UniversalFetcher):
+    pass
 
 
 if __name__ == "__main__":
-    fetcher = UniversalFetcher(SOURCE_FILE)
-    dfs = fetcher.run()
+    fetcher = UniversalFetcher()
+    fetcher.run()

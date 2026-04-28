@@ -28,6 +28,15 @@ def _r2_score(y_true, y_pred):
     return 1 - (ss_res / ss_tot)
 
 
+def _top_counts(series, limit=10):
+    if series is None:
+        return {}
+    clean_series = series.dropna().astype(str)
+    if clean_series.empty:
+        return {}
+    return {key: int(value) for key, value in clean_series.value_counts().head(limit).items()}
+
+
 def train_co2_model(df, output_dir):
     """
     Train a simple linear model: co2_emissions = a * distance_km + b.
@@ -53,13 +62,19 @@ def train_co2_model(df, output_dir):
 
     x_train, x_test, y_train, y_test = _train_test_split(x, y)
 
-    # Fit linear regression via numpy (degree 1).
     a, b = np.polyfit(x_train, y_train, 1)
     y_pred = a * x_test + b
 
     mae = float(np.mean(np.abs(y_test - y_pred)))
     rmse = float(np.sqrt(np.mean((y_test - y_pred) ** 2)))
     r2 = float(_r2_score(y_test, y_pred))
+
+    coverage = {
+        "rows": int(len(df)),
+        "operators": int(df["operator_name"].dropna().nunique()) if "operator_name" in df.columns else 0,
+        "countries": int(df["country"].dropna().nunique()) if "country" in df.columns else 0,
+        "sources": int(df["source_origin"].dropna().nunique()) if "source_origin" in df.columns else 0,
+    }
 
     os.makedirs(output_dir, exist_ok=True)
     metrics = {
@@ -70,11 +85,14 @@ def train_co2_model(df, output_dir):
         "coefficients": {"a": float(a), "b": float(b)},
         "metrics": {"mae": mae, "rmse": rmse, "r2": r2},
         "data_points": int(len(data)),
+        "coverage": coverage,
+        "top_countries": _top_counts(df["country"]) if "country" in df.columns else {},
+        "top_operators": _top_counts(df["operator_name"]) if "operator_name" in df.columns else {},
     }
 
     output_path = os.path.join(output_dir, "model_metrics.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
+    with open(output_path, "w", encoding="utf-8") as handle:
+        json.dump(metrics, handle, indent=2)
 
     logger.info(f"Model metrics written: {output_path}")
     return output_path
