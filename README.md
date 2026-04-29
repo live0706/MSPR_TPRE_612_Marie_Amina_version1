@@ -45,6 +45,7 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
     ├── transform.py    # Calcul Haversine & CO2 (Filtre > 100km)
     ├── load.py         # Ingestion SQL optimisée
     └── main_etl.py     # Chef d'orchestre du pipeline
+
 🚀 Guide de démarrage
 1. Lancement avec Docker Compose
 Pour démarrer l'ensemble de l'infrastructure (Base de données, API, Dashboard) :
