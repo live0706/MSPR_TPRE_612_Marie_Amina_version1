@@ -45,3 +45,36 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
     ├── transform.py    # Calcul Haversine & CO2 (Filtre > 100km)
     ├── load.py         # Ingestion SQL optimisée
     └── main_etl.py     # Chef d'orchestre du pipeline
+🚀 Guide de démarrage
+1. Lancement avec Docker Compose
+Pour démarrer l'ensemble de l'infrastructure (Base de données, API, Dashboard) :
+
+Bash
+docker compose up -d --build
+2. Exécution du Pipeline ETL
+Pour déclencher la découverte, le filtrage et l'ingestion automatique (cible > 10 000 trajets) :
+
+Bash
+docker compose run --rm etl
+3. Consultation des résultats
+Dashboard : http://localhost:8501
+
+Documentation API (Swagger) : http://localhost:8000/docs
+
+🛠 Stack Technique
+Langage : Python 3.11
+
+Data : Pandas, SQLAlchemy, PyArrow, NumPy
+
+API : FastAPI, Pydantic, Uvicorn
+
+Frontend : Streamlit
+
+Infrastructure : Docker, PostgreSQL 15
+
+📊 Indicateurs Clés (KPI)
+Connectivité : Analyse des trajets ferroviaires supérieurs à 100 km (Longue Distance).
+
+Impact Éco : Calcul des émissions de CO2 basé sur les facteurs d'émission réels des réseaux nationaux.
+
+Qualité (IA) : Monitoring de la complétude et de la validité des flux via des rapports de qualité automatisés.
