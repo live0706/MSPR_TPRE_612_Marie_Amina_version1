@@ -32,7 +32,6 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
 │   └── main.py         # Point d'entrée de l'API
 ├── dashboard/          # Interface de visualisation
 │   ├── app.py          # Dashboard analytique principal
-│   └── app_ai.py       # Monitoring de la qualité & Métriques modèles
 ├── data/               # Data Lake local
 │   ├── raw/            # Données brutes téléchargées (ZIP, CSV)
 │   └── processed/      # Données nettoyées et prêtes pour le chargement
@@ -45,6 +44,7 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
     ├── transform.py    # Calcul Haversine & CO2 (Filtre > 100km)
     ├── load.py         # Ingestion SQL optimisée
     └── main_etl.py     # Chef d'orchestre du pipeline
+```
 
 🚀 Guide de démarrage
 1. Lancement avec Docker Compose
