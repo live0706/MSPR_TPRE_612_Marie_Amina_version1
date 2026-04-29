@@ -52,15 +52,16 @@ Pour démarrer l'ensemble de l'infrastructure (Base de données, API, Dashboard)
 
 Bash
 docker compose up -d --build
+
 2. Exécution du Pipeline ETL
 Pour déclencher la découverte, le filtrage et l'ingestion automatique (cible > 10 000 trajets) :
 
 Bash
 docker compose run --rm etl
+
 3. Consultation des résultats
 Dashboard : http://localhost:8501
 
-Documentation API (Swagger) : http://localhost:8000/docs
 
 🛠 Stack Technique
 Langage : Python 3.11
