@@ -6,15 +6,18 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="ObRail Dashboard", page_icon="🚆", layout="wide")
+from utils import build_trajet_params, normalize_status_label
+
+st.set_page_config(page_title="ObRail Control Center", page_icon="🚆", layout="wide")
 
 API_BASE_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
+PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
+GRAFANA_URL = os.getenv("GRAFANA_URL", "http://localhost:3000")
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def api_get(endpoint, params=None):
-    url = f"{API_BASE_URL}{endpoint}"
-    response = requests.get(url, params=params, timeout=5)
+    response = requests.get(f"{API_BASE_URL}{endpoint}", params=params, timeout=10)
     response.raise_for_status()
     return response.json()
 
@@ -27,250 +30,285 @@ def safe_api_get(endpoint, params=None, default=None):
         return default
 
 
-def build_filter_params(country_code, operator_name, year):
-    params = {}
-    if country_code and country_code != "Tous":
-        params["country_code"] = country_code
-    if operator_name and operator_name != "Tous":
-        params["operator_name"] = operator_name
-    if year and year != "Tous":
-        params["year"] = int(year)
-    return params
-
-
-st.title("ObRail Europe")
-st.caption("Dashboard analytique connecte a l'API ObRail.")
-
-countries = safe_api_get("/api/countries", default=[]) or []
-operators = safe_api_get("/api/operators", default=[]) or []
-kpis = safe_api_get("/api/dashboard/kpis", default={}) or {}
-
-country_map = {"Tous": None}
-for country in countries:
-    country_map[country["country_name"]] = country["country_code"]
-
-operator_map = {"Tous": None}
-for operator in operators:
-    operator_map[operator["operator_name"]] = operator["operator_name"]
-
-with st.sidebar:
-    st.header("Navigation")
-    page = st.radio(
-        "Page",
-        ["Accueil", "Dashboard", "Trains", "Operateurs", "Sources et qualite"],
+def render_theme():
+    st.markdown(
+        """
+        <style>
+            .stApp {
+                background:
+                    radial-gradient(circle at top right, rgba(25, 91, 255, 0.08), transparent 35%),
+                    linear-gradient(180deg, #F8FAFC 0%, #EDF2F7 100%);
+            }
+            .block-container {
+                max-width: 1400px;
+                padding-top: 1.5rem;
+                padding-bottom: 2rem;
+            }
+            .hero-card, .panel-card {
+                background: white;
+                border: 1px solid #D7E2F0;
+                border-radius: 18px;
+                padding: 1.2rem 1.25rem;
+                box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+            }
+            .hero-title {
+                font-size: 2rem;
+                font-weight: 700;
+                color: #0F172A;
+                margin-bottom: 0.35rem;
+            }
+            .hero-subtitle {
+                color: #334155;
+                font-size: 1rem;
+                line-height: 1.5;
+                margin-bottom: 0;
+            }
+            .status-chip {
+                display: inline-block;
+                border-radius: 999px;
+                padding: 0.35rem 0.75rem;
+                font-weight: 600;
+                font-size: 0.9rem;
+                margin-bottom: 0.75rem;
+            }
+            .status-ok {
+                background: #DCFCE7;
+                color: #166534;
+            }
+            .status-degraded {
+                background: #FEF3C7;
+                color: #92400E;
+            }
+            .status-error {
+                background: #FEE2E2;
+                color: #991B1B;
+            }
+            .quick-links a {
+                text-decoration: none;
+                font-weight: 600;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.header("Filtres")
-    selected_country_name = st.selectbox("Pays", list(country_map.keys()))
-    selected_operator_name = st.selectbox("Operateur", list(operator_map.keys()))
-    train_type = st.selectbox("Type de train", ["Tous", "Nuit", "Jour"])
 
-    years_covered = kpis.get("years_covered", "")
-    years = ["Tous"]
-    if "-" in years_covered:
-        start_year, end_year = years_covered.split("-", 1)
-        if start_year.isdigit() and end_year.isdigit():
-            years.extend([str(year) for year in range(int(start_year), int(end_year) + 1)])
-    selected_year = st.selectbox("Annee", years)
+def render_header(health_payload):
+    status = (health_payload or {}).get("status", "error")
+    status_class = {
+        "ok": "status-ok",
+        "degraded": "status-degraded",
+        "error": "status-error",
+    }.get(status, "status-error")
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <div class="status-chip {status_class}">Etat API: {normalize_status_label(status)}</div>
+            <div class="hero-title">ObRail Control Center</div>
+            <p class="hero-subtitle">
+                Interface d'exploitation pour consulter les trajets ferroviaires europeens,
+                suivre les volumes, verifier la sante de l'API et acceder a la supervision.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-filter_params = build_filter_params(
-    country_map[selected_country_name],
-    operator_map[selected_operator_name],
-    selected_year,
-)
 
-
-def render_overview():
-    timeline = safe_api_get("/api/statistics/timeline", default=[]) or []
-    comparison = safe_api_get("/api/analysis/train-types-comparison", default=[]) or []
-
+def render_overview(kpis, health_payload, monitoring_payload):
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Pays couverts", int(kpis.get("total_countries", 0)))
-    col2.metric("Trains references", int(kpis.get("total_trains", 0)))
+    col1.metric("Trajets references", int(kpis.get("total_trains", 0)))
+    col2.metric("Pays couverts", int(kpis.get("total_countries", 0)))
     col3.metric("Operateurs", int(kpis.get("total_operators", 0)))
-    col4.metric("CO2 moyen / passager", f"{float(kpis.get('avg_co2_per_passenger', 0.0)):.3f}")
+    col4.metric("Periode", kpis.get("years_covered", "N/A"))
 
-    st.subheader("Synthese")
-    summary_col1, summary_col2 = st.columns(2)
-    summary_col1.info(
-        f"Periode couverte : {kpis.get('years_covered', 'N/A')}\n\n"
-        f"Volume agrege : {float(kpis.get('total_passengers', 0.0)):.0f}\n\n"
-        f"CO2 total agrege : {float(kpis.get('total_co2_emissions', 0.0)):.2f}"
-    )
-
-    if comparison:
-        comparison_df = pd.DataFrame(comparison)
-        fig = px.bar(
-            comparison_df,
-            x="train_type",
-            y="train_count",
-            color="train_type",
-            title="Volume de trains jour / nuit",
-            color_discrete_map={"night": "#1D4ED8", "day": "#F59E0B"},
+    detail_col1, detail_col2 = st.columns([1.2, 1])
+    with detail_col1:
+        st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+        st.subheader("Etat de la plateforme")
+        st.write(
+            {
+                "api_status": health_payload.get("status", "unknown"),
+                "database": health_payload.get("database", {}),
+                "quality_report": health_payload.get("quality_report", {}),
+                "model_metrics": health_payload.get("model_metrics", {}),
+            }
         )
-        fig.update_xaxes(ticktext=["Jour", "Nuit"], tickvals=["day", "night"])
-        summary_col2.plotly_chart(fig, use_container_width=True)
-    else:
-        summary_col2.warning("Aucune comparaison disponible.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with detail_col2:
+        st.markdown('<div class="panel-card quick-links">', unsafe_allow_html=True)
+        st.subheader("Acces rapides")
+        st.markdown(
+            f"""
+            - [Swagger API]({API_BASE_URL}/api/docs)
+            - [Prometheus]({PROMETHEUS_URL})
+            - [Grafana]({GRAFANA_URL})
+            - [Healthcheck API]({API_BASE_URL}/health)
+            - [Resume monitoring]({API_BASE_URL}/api/monitoring/summary)
+            """
+        )
+        st.caption(
+            f"Derniere ingestion connue : {monitoring_payload.get('latest_ingestion_at', 'Aucune donnee')}"
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_catalogue(trajets_df):
+    st.subheader("Catalogue des trajets")
+    if trajets_df.empty:
+        st.warning("Aucun trajet ne correspond aux filtres courants.")
+        return
+
+    st.metric("Resultats", len(trajets_df))
+    display_columns = [
+        "trip_id",
+        "operator_name",
+        "origin_city",
+        "destination_city",
+        "country_code",
+        "service_type",
+        "departure_time",
+        "distance_km",
+        "co2_emissions",
+    ]
+    st.dataframe(trajets_df[display_columns], use_container_width=True, hide_index=True)
+
+    selected_trip_id = st.selectbox("Detail d'un trajet", trajets_df["trip_id"].tolist())
+    trip_detail = safe_api_get(f"/trajets/{selected_trip_id}", default={}) or {}
+    if trip_detail:
+        st.json(trip_detail)
+
+
+def render_statistics(timeline, volumes_df):
+    st.subheader("Statistiques et volumes")
+    stat_col1, stat_col2 = st.columns(2)
 
     if timeline:
         timeline_df = pd.DataFrame(timeline)
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=timeline_df["year"], y=timeline_df["passengers"], name="Volume agrege"))
+        fig.add_trace(go.Scatter(x=timeline_df["year"], y=timeline_df["train_count"], name="Trajets"))
         fig.add_trace(go.Scatter(x=timeline_df["year"], y=timeline_df["co2_emissions"], name="CO2", yaxis="y2"))
         fig.update_layout(
-            title="Evolution temporelle",
+            title="Evolution des volumes et emissions",
             xaxis_title="Annee",
-            yaxis_title="Volume agrege",
+            yaxis_title="Trajets",
             yaxis2=dict(title="CO2", overlaying="y", side="right"),
             hovermode="x unified",
         )
-        st.plotly_chart(fig, use_container_width=True)
-
-
-def render_dashboard():
-    metrics = safe_api_get("/api/dashboard/metrics", default=[]) or []
-    ranking = safe_api_get("/api/statistics/co2-ranking", params={"limit": 15}, default=[]) or []
-    coverage = safe_api_get("/api/geographic/coverage", default={}) or {}
-
-    if metrics:
-        metrics_df = pd.DataFrame(metrics)
-        fig = px.scatter(
-            metrics_df,
-            x="avg_passengers",
-            y="avg_co2_per_passenger",
-            size="avg_co2_emissions",
-            color="country_name",
-            hover_name="country_name",
-            title="Relation volume / CO2 par pays",
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        stat_col1.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("Aucune metrique disponible.")
+        stat_col1.info("Aucune serie temporelle disponible.")
 
-    col1, col2 = st.columns(2)
-    if ranking:
-        ranking_df = pd.DataFrame(ranking)
+    if not volumes_df.empty:
         fig = px.bar(
-            ranking_df,
-            x="country_name",
-            y="avg_co2_per_passenger",
-            color="performance",
-            title="Classement CO2",
-            color_discrete_map={"good": "#10B981", "medium": "#F59E0B", "bad": "#EF4444"},
+            volumes_df,
+            x="country_code",
+            y="total_trajets",
+            color="year",
+            title="Volumes de trajets par pays",
+            barmode="group",
         )
-        col1.plotly_chart(fig, use_container_width=True)
-        col2.dataframe(ranking_df, use_container_width=True, hide_index=True)
-
-    if coverage.get("coverage_by_country"):
-        st.subheader("Couverture geographique")
-        coverage_df = pd.DataFrame(coverage["coverage_by_country"])
-        fig = px.bar(
-            coverage_df,
-            x="country_name",
-            y="train_count",
-            title="Trains references par pays",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-
-def render_trains():
-    if train_type == "Nuit":
-        endpoint = "/api/night-trains/night"
-    elif train_type == "Jour":
-        endpoint = "/api/night-trains/day"
+        stat_col2.plotly_chart(fig, use_container_width=True)
     else:
-        endpoint = "/api/night-trains"
+        stat_col2.info("Aucun volume agrege disponible.")
 
-    trains = safe_api_get(endpoint, params={"limit": 500, **filter_params}, default=[]) or []
-    if not trains:
-        st.warning("Aucun train trouve pour les filtres courants.")
-        return
-
-    trains_df = pd.DataFrame(trains)
-    trains_df["type"] = trains_df["is_night"].map({True: "Nuit", False: "Jour"})
-
-    st.metric("Trains trouves", len(trains_df))
-    st.dataframe(
-        trains_df[
-            ["night_train", "country_name", "operator_name", "year", "type", "distance_km", "co2_emissions"]
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    grouped = trains_df.groupby(["country_name", "type"], as_index=False).size()
-    grouped = grouped.rename(columns={"size": "count"})
-    fig = px.bar(
-        grouped,
-        x="country_name",
-        y="count",
-        color="type",
-        title="Repartition des trains par pays",
-        barmode="group",
-        color_discrete_map={"Jour": "#F59E0B", "Nuit": "#1D4ED8"},
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if not volumes_df.empty:
+        st.dataframe(volumes_df, use_container_width=True, hide_index=True)
 
 
-def render_operators():
-    operators_list = safe_api_get("/api/operators", params={"limit": 500}, default=[]) or []
-    if not operators_list:
-        st.warning("Aucun operateur disponible.")
-        return
+def render_monitoring(health_payload, monitoring_payload, sources_payload):
+    st.subheader("Monitoring et supervision")
+    left_col, right_col = st.columns([1.1, 1])
 
-    operators_df = pd.DataFrame(operators_list)
-    st.dataframe(operators_df, use_container_width=True, hide_index=True)
+    with left_col:
+        st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+        st.write(health_payload)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    if selected_operator_name != "Tous":
-        operator_id = operators_df.loc[
-            operators_df["operator_name"] == selected_operator_name, "operator_id"
-        ]
-        if not operator_id.empty:
-            stats = safe_api_get(f"/api/operators/{int(operator_id.iloc[0])}/stats", default={}) or {}
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Trains operes", int(stats.get("total_trains", 0)))
-            col2.metric("Pays desservis", int(stats.get("countries_count", 0)))
-            col3.metric("Operateur", stats.get("operator_name", "N/A"))
-            if stats.get("countries_served"):
-                st.write("Pays desservis :", ", ".join(stats["countries_served"]))
+    with right_col:
+        st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+        st.write(monitoring_payload)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    sources = sources_payload.get("sources", []) if isinstance(sources_payload, dict) else []
+    if sources:
+        st.subheader("Sources de donnees")
+        sources_df = pd.DataFrame(sources)
+        st.dataframe(sources_df, use_container_width=True, hide_index=True)
 
 
-def render_quality():
-    quality_payload = safe_api_get("/api/metadata/quality", default={}) or {}
+def main():
+    render_theme()
+
+    health_payload = safe_api_get("/health", default={}) or {}
+    monitoring_payload = safe_api_get("/api/monitoring/summary", default={}) or {}
+    kpis = safe_api_get("/api/dashboard/kpis", default={}) or {}
+    countries = safe_api_get("/api/countries", default=[]) or []
+    operators = safe_api_get("/api/operators", default=[]) or []
+    timeline = safe_api_get("/api/statistics/timeline", default=[]) or []
     sources_payload = safe_api_get("/api/metadata/sources", default={"sources": []}) or {"sources": []}
 
-    quality_report = quality_payload.get("quality_report", {})
-    model_metrics = quality_payload.get("model_metrics", {})
+    render_header(health_payload)
 
-    source_rows = sources_payload.get("sources", [])
-    if source_rows:
-        st.subheader("Sources chargees")
-        st.dataframe(pd.DataFrame(source_rows), use_container_width=True, hide_index=True)
+    country_options = {"Tous": None}
+    for country in countries:
+        country_options[f"{country['country_name']} ({country['country_code']})"] = country["country_code"]
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Rapport qualite")
-        if quality_report:
-            st.json(quality_report)
-        else:
-            st.info("Aucun rapport qualite disponible.")
+    operator_options = {"Tous": None}
+    for operator in operators:
+        operator_options[operator["operator_name"]] = operator["operator_name"]
 
-    with col2:
-        st.subheader("Metriques modele")
-        if model_metrics:
-            st.json(model_metrics)
-        else:
-            st.info("Aucune metrique modele disponible.")
+    with st.sidebar:
+        st.header("Navigation")
+        page = st.radio("Vue", ["Vue d'ensemble", "Catalogue", "Statistiques", "Monitoring"])
+        st.header("Filtres")
+        selected_country_label = st.selectbox("Pays", list(country_options.keys()))
+        selected_operator_label = st.selectbox("Operateur", list(operator_options.keys()))
+        selected_service_type = st.selectbox("Service", ["Tous", "Nuit", "Jour"])
+        selected_year = st.text_input("Annee", value="")
+        search_text = st.text_input("Recherche libre", placeholder="Ville, operateur, identifiant...")
+
+    year_value = selected_year.strip() if selected_year else None
+    if year_value and not year_value.isdigit():
+        st.sidebar.warning("Le filtre annee doit etre numerique.")
+        year_value = None
+
+    trajets_params = build_trajet_params(
+        country_code=country_options[selected_country_label],
+        operator_name=operator_options[selected_operator_label],
+        year=year_value or None,
+        service_type=selected_service_type,
+        search=search_text,
+        limit=250,
+    )
+    trajets = safe_api_get("/trajets", params=trajets_params, default=[]) or []
+    volumes = safe_api_get(
+        "/stats/volumes",
+        params={
+            key: value
+            for key, value in {
+                "country_code": country_options[selected_country_label],
+                "year": int(year_value) if year_value else None,
+                "limit": 100,
+            }.items()
+            if value is not None
+        },
+        default=[],
+    ) or []
+
+    trajets_df = pd.DataFrame(trajets)
+    volumes_df = pd.DataFrame(volumes)
+
+    if page == "Vue d'ensemble":
+        render_overview(kpis, health_payload, monitoring_payload)
+    elif page == "Catalogue":
+        render_catalogue(trajets_df)
+    elif page == "Statistiques":
+        render_statistics(timeline, volumes_df)
+    else:
+        render_monitoring(health_payload, monitoring_payload, sources_payload)
 
 
-if page == "Accueil":
-    render_overview()
-elif page == "Dashboard":
-    render_dashboard()
-elif page == "Trains":
-    render_trains()
-elif page == "Operateurs":
-    render_operators()
-else:
-    render_quality()
+if __name__ == "__main__":
+    main()

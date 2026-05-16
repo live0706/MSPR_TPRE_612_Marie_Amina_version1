@@ -41,3 +41,14 @@ class TrainTypeComparison(BaseModel):
     avg_distance_km: float
     avg_co2_emissions: float
     efficiency_score: float
+
+
+class VolumeStatsResponse(BaseModel):
+    year: int
+    country_code: str
+    country_name: str
+    total_trajets: int
+    night_trajets: int
+    day_trajets: int
+    avg_distance_km: float
+    total_co2_emissions: float

@@ -1,14 +1,19 @@
 import json
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
-from database import engine
+from database import get_engine
 
 
-def ensure_db():
-    if engine is None:
-        raise HTTPException(status_code=500, detail="Base de donnees non connectee.")
+def ensure_db() -> None:
+    try:
+        get_engine()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Base de donnees non connectee.",
+        ) from exc
 
 
 def read_json_file(path):

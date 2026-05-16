@@ -1,109 +1,97 @@
-# 🚄 ObRail Europe : Plateforme Analytique Big Data Ferroviaire
+# ObRail Europe - MSPR TPRE532
 
-![Python](https://img.shields.io/badge/python-3.11-blue.svg)
-![Docker](https://img.shields.io/badge/docker-enabled-blue.svg)
-![FastAPI](https://img.shields.io/badge/API-FastAPI-green.svg)
-![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2015-blue.svg)
+ObRail Europe est une solution de data engineering et de restitution ferroviaire europeenne industrialisee pour la MSPR EPSI TPRE532. Le projet assemble un ETL Python, une API FastAPI, une base PostgreSQL, un dashboard Streamlit et une couche d'observabilite Prometheus/Grafana.
 
-## 📖 Présentation du projet
-**ObRail Europe** est une solution de Business Intelligence (BI) "End-to-End" conçue pour auditer, analyser et visualiser l'offre ferroviaire longue distance en Europe sur la période **2010-2026**.
+## Objectifs
 
-La plateforme automatise la découverte de sources de données (Crawl d'API), leur ingestion massive (Multi-threading), et leur transformation analytique pour fournir des métriques précises sur les émissions de CO2 et la connectivité transfrontalière.
+- consolider des donnees ferroviaires europeennes dans PostgreSQL
+- exposer une API documentee et testee
+- fournir une interface de consultation des trajets et des statistiques
+- superviser l'etat de la plateforme
+- fournir un socle Docker, CI/CD, documentation et runbooks
 
----
+## Services
 
-## 🏗 Architecture de la Solution
-L'écosystème ObRail est divisé en quatre services conteneurisés :
+- `db` : PostgreSQL 15
+- `etl` : pipeline batch d'extraction / transformation / chargement
+- `api` : FastAPI sur `http://localhost:8000`
+- `dashboard` : Streamlit sur `http://localhost:8501`
+- `prometheus` : supervision metrics sur `http://localhost:9090`
+- `grafana` : dashboards sur `http://localhost:3000`
+- `blackbox` : probes HTTP pour `/health`
 
-*   **Ingestion & ETL (Python)** : Découverte dynamique de flux GTFS via l'API Transitland et traitement parallèle.
-*   **Stockage (PostgreSQL 15)** : Modèle hybride associant une couche transactionnelle (Audit) et une couche analytique (Schéma en étoile).
-*   **Restitution (FastAPI)** : API REST modulaire servant les indicateurs de performance (KPI).
-*   **Visualisation (Streamlit)** : Dashboards décisionnels et monitoring de la qualité des données (IA Quality).
+## Endpoints principaux
 
----
+- `GET /health`
+- `GET /trajets`
+- `GET /trajets/{id}`
+- `GET /stats/volumes`
+- `GET /api/docs`
+- `GET /api/monitoring/summary`
+- `GET /metrics`
 
-## 📂 Organisation du Dépôt
-```plaintext
-.
-├── api/                # Service API REST (FastAPI)
-│   ├── routers/        # Endpoints : analysis, statistics, trains, etc.
-│   ├── schemas/        # Validation des contrats de données Pydantic
-│   ├── database.py     # Connexion à la base via SQLAlchemy
-│   └── main.py         # Point d'entrée de l'API
-├── dashboard/          # Interface de visualisation
-│   ├── app.py          # Dashboard analytique principal
-├── data/               # Data Lake local
-│   ├── raw/            # Données brutes téléchargées (ZIP, CSV)
-│   └── processed/      # Données nettoyées et prêtes pour le chargement
-├── database/           # Couche de persistance SQL
-│   ├── init.sql        # Schéma relationnel de base
-│   └── analytics.sql   # Couche analytique (Dimensions & Faits)
-<<<<<<< HEAD
-└── etl/                # Pipeline Data Engineering (Le cœur du projet)
-    ├── discover.py     # Crawling automatique des API européennes
-    ├── extract.py      # Fetcher multi-threadé haute performance
-    ├── transform.py    # Calcul Haversine & CO2 (Filtre > 100km)
-    ├── load.py         # Ingestion SQL optimisée
-    └── main_etl.py     # Chef d'orchestre du pipeline
+## Lancement rapide
+
+1. Copier la configuration d'environnement :
+
+```bash
+cp .env.example .env
 ```
-=======
-└── etl/                       # Pipeline Data Engineering (Le coeur du projet)
-    ├── discover.py            # Crawling automatique des API européennes
-    ├── extract.py             # Fetcher multi-threadé haute performance
-    ├── gtfs.py                # Parser GTFS (Gestion temporelle 2010-2026)
-    ├── transform.py           # Calcul Haversine & CO2 (Seuil longue distance configurable)
-    ├── load.py                # Ingestion SQL optimisée
-    └── main_etl.py            # Chef d'orchestre du pipeline
-⚡ Fonctionnalités Avancées
-1. Ingestion Massive & Parallélisation
-Contrairement aux systèmes séquentiels, ObRail utilise un MassiveFetcher basé sur ThreadPoolExecutor. Cela permet de télécharger et de traiter simultanément plusieurs flux nationaux (SNCF, DB, ÖBB, Renfe), réduisant le temps d'ingestion de 80%.
 
-2. "Temporal Awareness" (2010-2026)
-Le module gtfs.py analyse les métadonnées de chaque flux (feed_info.txt) pour ancrer les données temporelles. Cette approche permet de traiter sans distinction des archives de 2010 et des prévisions de 2026 au sein d'un même référentiel.
+2. Démarrer la stack :
 
-3. Schéma Analytique (Warehouse)
-Le projet implémente un modèle en étoile pour optimiser les performances de lecture :
-
-Faits : facts_night_trains (Indicateurs par trajet), facts_country_stats (Agrégats nationaux).
-
-Dimensions : dim_countries, dim_operators, dim_years.
->>>>>>> 471bd73 (version pour mspr5612)
-
-🚀 Guide de démarrage
-1. Lancement avec Docker Compose
-Pour démarrer l'ensemble de l'infrastructure (Base de données, API, Dashboard) :
-
-Bash
+```bash
 docker compose up -d --build
+```
 
-2. Exécution du Pipeline ETL
-Pour déclencher la découverte, le filtrage et l'ingestion automatique (cible > 10 000 trajets) :
+3. Lancer un chargement ETL si nécessaire :
 
-Bash
+```bash
 docker compose run --rm etl
+```
 
-3. Consultation des résultats
-Dashboard : http://localhost:8501
+## Tests
 
+Tests Python :
 
-🛠 Stack Technique
-Langage : Python 3.11
+```bash
+pytest
+```
 
-Data : Pandas, SQLAlchemy, PyArrow, NumPy
+Tests dans le conteneur API :
 
-API : FastAPI, Pydantic, Uvicorn
+```bash
+docker compose run --rm api pytest
+```
 
-Frontend : Streamlit
+## Documentation
 
-Infrastructure : Docker, PostgreSQL 15
+- [Architecture](docs/architecture.md)
+- [Deploiement](docs/deploiement.md)
+- [Tests](docs/tests.md)
+- [CI/CD](docs/cicd.md)
+- [Monitoring](docs/monitoring.md)
+- [RGPD, accessibilite, securite](docs/rgpd_accessibilite_securite.md)
+- [Maintenance et rollback](docs/maintenance_rollback.md)
+- [Plan de soutenance](docs/soutenance_plan.md)
 
-📊 Indicateurs Clés (KPI)
-<<<<<<< HEAD
-Connectivité : Analyse des trajets ferroviaires supérieurs à 100 km (Longue Distance).
-=======
-Connectivite : Analyse des trajets ferroviaires longue distance selon un seuil configurable.
->>>>>>> 471bd73 (version pour mspr5612)
+## Structure cible
 
-Impact Éco : Calcul des émissions de CO2 basé sur les facteurs d'émission réels des réseaux nationaux.
+```text
+.
+|-- api/
+|-- dashboard/
+|-- database/
+|-- etl/
+|-- monitoring/
+|-- docs/
+|-- .github/workflows/ci.yml
+|-- docker-compose.yml
+`-- README.md
+```
 
-Qualité (IA) : Monitoring de la complétude et de la validité des flux via des rapports de qualité automatisés.
+## Remarques MSPR
+
+- l'ETL est conserve en batch pour ne pas coupler la collecte au runtime de l'API
+- le dashboard Streamlit est garde pour privilegier une solution simple, robuste et demo-friendly
+- Prometheus, Blackbox et Grafana couvrent la disponibilite, la latence, le taux d'erreur et la sante HTTP

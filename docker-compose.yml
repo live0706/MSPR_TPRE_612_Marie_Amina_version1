@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: obrail_db
-    restart: always
+    restart: unless-stopped
     env_file: .env
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -10,18 +10,24 @@ services:
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - obrail_net
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     ports:
       - "5432:5432"
+    networks:
+      - obrail_net
 
   etl:
     build: ./etl
     container_name: obrail_etl
-    depends_on:
-      - db
     env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       DATA_DIR: /app/data
       PAN_MAX_FEEDS: 50
@@ -34,44 +40,120 @@ services:
       TRANSITLAND_ENABLED: "false"
     volumes:
       - ./data:/app/data
+    restart: "no"
     networks:
       - obrail_net
 
   api:
     build: ./api
     container_name: obrail_api
-    restart: always
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
+    restart: unless-stopped
     env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_VERSION: ${APP_VERSION:-2.1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATA_DIR: /app/data
       QUALITY_REPORT_PATH: /app/data/processed/quality_report.json
       MODEL_METRICS_PATH: /app/data/processed/model_metrics.json
+      ENABLE_PROMETHEUS: ${ENABLE_PROMETHEUS:-true}
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://localhost:9090}
+      GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8501,http://127.0.0.1:8501}
     volumes:
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "8000:8000"
     networks:
       - obrail_net
 
   dashboard:
     build: ./dashboard
     container_name: obrail_dashboard
-    restart: always
-    ports:
-      - "8501:8501"
-    depends_on:
-      - api
+    restart: unless-stopped
     env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
     environment:
       API_URL: http://api:8000
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://localhost:9090}
+      GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "8501:8501"
     networks:
       - obrail_net
 
-  
+  blackbox:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: obrail_blackbox
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+    networks:
+      - obrail_net
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: obrail_prometheus
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      blackbox:
+        condition: service_started
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - obrail_net
+
+  grafana:
+    image: grafana/grafana-oss:11.1.4
+    container_name: obrail_grafana
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - obrail_net
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   obrail_net:

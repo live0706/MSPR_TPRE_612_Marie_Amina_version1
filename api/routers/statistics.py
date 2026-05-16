@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Query
 
 from database import fetch_all
-from schemas.statistics import CO2RankingItem, TimelineData
+from schemas.statistics import CO2RankingItem, TimelineData, VolumeStatsResponse
 from utils import ensure_db
 
 router = APIRouter()
@@ -77,3 +77,47 @@ def get_co2_ranking(limit: int = Query(10, ge=1, le=50)):
             }
         )
     return ranking
+
+
+@router.get(
+    "/stats/volumes",
+    response_model=List[VolumeStatsResponse],
+    summary="Consulter les volumes de trajets",
+    description="Agrege les trajets par pays et par annee pour suivre les volumes, le mix jour/nuit et les emissions.",
+)
+def get_volume_stats(
+    country_code: str | None = Query(None, pattern="^[A-Z]{2,10}$"),
+    year: int | None = Query(None, ge=2010, le=2100),
+    limit: int = Query(100, ge=1, le=500),
+):
+    ensure_db()
+    filters = []
+    params = {"limit": limit}
+
+    if country_code:
+        filters.append("c.country_code = :country_code")
+        params["country_code"] = country_code
+    if year is not None:
+        filters.append("y.year = :year")
+        params["year"] = year
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT
+            y.year,
+            c.country_code,
+            c.country_name,
+            COUNT(f.fact_id) AS total_trajets,
+            COUNT(*) FILTER (WHERE f.is_night = TRUE) AS night_trajets,
+            COUNT(*) FILTER (WHERE f.is_night = FALSE) AS day_trajets,
+            COALESCE(AVG(f.distance_km), 0.0) AS avg_distance_km,
+            COALESCE(SUM(f.co2_emissions), 0.0) AS total_co2_emissions
+        FROM facts_night_trains f
+        JOIN dim_countries c ON f.country_id = c.country_id
+        JOIN dim_years y ON f.year_id = y.year_id
+        {where_clause}
+        GROUP BY y.year, c.country_code, c.country_name
+        ORDER BY y.year DESC, total_trajets DESC, c.country_name
+        LIMIT :limit
+    """
+    return fetch_all(query, params)
