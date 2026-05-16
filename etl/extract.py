@@ -1,21 +1,23 @@
-import json
 import logging
 import os
 import re
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from glob import glob
 
+import pandas as pd
 import requests
 
 from gtfs import parse_gtfs_zip
+from source_config import SOURCE_FILE, load_sources
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR") or os.path.abspath(os.path.join(BASE_DIR, "..", "data"))
 DATA_RAW_DIR = os.path.join(DATA_DIR, "raw")
-SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
+DATA_ARCHIVES_DIR = os.path.join(DATA_RAW_DIR, "archives")
 
 DEFAULT_TIMEOUT = int(os.getenv("EXTRACT_TIMEOUT", "90"))
 DEFAULT_MAX_WORKERS = max(2, int(os.getenv("EXTRACT_MAX_WORKERS", "8")))
@@ -23,17 +25,34 @@ CHUNK_SIZE = 65536
 HEADERS = {"User-Agent": "ObRail/1.0"}
 
 os.makedirs(DATA_RAW_DIR, exist_ok=True)
+os.makedirs(DATA_ARCHIVES_DIR, exist_ok=True)
 
 
-def _sanitize_filename(value):
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("._") or "source"
+def _sanitize_filename(value, extension):
+    clean_name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("._")
+    return f"{clean_name or 'source'}.{extension}"
 
 
 def _source_url(source):
+    local_path = source.get("local_path")
+    if isinstance(local_path, str) and local_path.strip() and os.path.exists(local_path.strip()):
+        return local_path.strip()
+
     url = source.get("url")
     if isinstance(url, str) and url.strip():
         return url.strip()
     return None
+
+
+def _fill_metadata_column(df, column_name, default_value):
+    if column_name not in df.columns:
+        df[column_name] = default_value
+        return
+
+    current_values = df[column_name]
+    if getattr(current_values, "dtype", None) == "object":
+        current_values = current_values.replace(r"^\s*$", pd.NA, regex=True)
+    df[column_name] = current_values.where(current_values.notna(), default_value)
 
 
 class UniversalFetcher:
@@ -43,49 +62,70 @@ class UniversalFetcher:
         self.request_timeout = request_timeout or DEFAULT_TIMEOUT
 
     def load_config(self):
-        if not os.path.exists(self.config_path):
-            logger.error(f"Configuration introuvable : {self.config_path}")
+        data = load_sources(self.config_path)
+        if not data:
+            logger.error(f"Aucune configuration source exploitable trouvee via : {self.config_path}")
             return []
 
-        try:
-            with open(self.config_path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except Exception as exc:
-            logger.error(f"Lecture config impossible : {exc}")
-            return []
-
-        if not isinstance(data, list):
-            return []
-
-        return [
+        base_sources = [
             source
             for source in data
             if isinstance(source, dict)
             and source.get("enabled") is not False
             and _source_url(source)
-            and source.get("type", "gtfs") == "gtfs"
+            and source.get("type", "gtfs").lower() in ["gtfs", "csv"]
         ]
 
-    def _target_path(self, source):
-        source_id = _sanitize_filename(source.get("id") or "unknown_source")
-        return os.path.join(DATA_RAW_DIR, f"{source_id}.zip")
+        expanded_sources = []
+        for source in base_sources:
+            expanded_sources.append(source)
+            expanded_sources.extend(self._discover_local_archives(source))
+        return expanded_sources
 
-    def _download_gtfs(self, source):
-        file_path = self._target_path(source)
+    def _discover_local_archives(self, source):
+        source_id = source.get("id")
+        if not source_id:
+            return []
+
+        archive_dir = os.path.join(DATA_ARCHIVES_DIR, str(source_id))
+        if not os.path.isdir(archive_dir):
+            return []
+
+        archive_sources = []
+        for pattern in ("*.zip", "*.csv"):
+            for archive_path in sorted(glob(os.path.join(archive_dir, pattern))):
+                archive_name = os.path.splitext(os.path.basename(archive_path))[0]
+                archive_sources.append(
+                    {
+                        **source,
+                        "id": f"{source_id}__{archive_name}",
+                        "source_origin_id": source_id,
+                        "local_path": archive_path,
+                        "url": archive_path,
+                        "description": f"{source.get('description')} [{archive_name}]",
+                        "type": "csv" if archive_path.lower().endswith(".csv") else "gtfs",
+                    }
+                )
+        if archive_sources:
+            logger.info(f"{len(archive_sources)} archive(s) locale(s) detectee(s) pour {source_id}")
+        return archive_sources
+
+    def _download_file(self, source):
+        url = _source_url(source)
+        source_type = source.get("type", "gtfs").lower()
+        extension = "zip" if source_type == "gtfs" else "csv"
+
+        if isinstance(url, str) and os.path.exists(url):
+            return url
+
+        file_path = os.path.join(DATA_RAW_DIR, _sanitize_filename(source.get("id"), extension))
         temp_path = f"{file_path}.part"
 
         if os.path.exists(file_path):
-            if zipfile.is_zipfile(file_path):
+            if source_type == "gtfs" and zipfile.is_zipfile(file_path):
                 return file_path
-            logger.warning(f"Archive invalide detectee, retelechargement : {os.path.basename(file_path)}")
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
-        url = _source_url(source)
-        if not url:
-            raise ValueError("URL de source manquante")
+            if source_type == "csv":
+                return file_path
 
         last_error = None
         for attempt in range(1, 3):
@@ -94,53 +134,45 @@ class UniversalFetcher:
                     response.raise_for_status()
                     with open(temp_path, "wb") as handle:
                         for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                            if chunk:
-                                handle.write(chunk)
+                            handle.write(chunk)
 
-                if not zipfile.is_zipfile(temp_path):
-                    raise ValueError("Le fichier telecharge n'est pas une archive GTFS valide")
+                if source_type == "gtfs" and not zipfile.is_zipfile(temp_path):
+                    raise ValueError("Archive GTFS invalide")
 
                 os.replace(temp_path, file_path)
                 return file_path
             except Exception as exc:
                 last_error = exc
                 if os.path.exists(temp_path):
-                    try:
-                        os.remove(temp_path)
-                    except OSError:
-                        pass
-                logger.warning(
-                    "%s tentative %s/2 en echec : %s",
-                    source.get("id", "unknown_source"),
-                    attempt,
-                    exc,
-                )
+                    os.remove(temp_path)
+                logger.warning(f"Echec {source.get('id')} tentative {attempt}: {exc}")
 
-        raise last_error or RuntimeError("Echec du telechargement GTFS")
+        raise last_error
 
     def process_one_source(self, source):
-        source_id = source.get("id", "unknown_source")
+        source_id = source.get("id", "unknown")
+        source_origin = source.get("source_origin_id") or source_id
         try:
-            file_path = self._download_gtfs(source)
+            file_path = self._download_file(source)
             df = parse_gtfs_zip(file_path)
+
             if df is None or df.empty:
-                logger.info(f"INFO {source_id}: aucun trajet rail exploitable")
+                logger.info(f"SKIP {source_id}: aucune donnee exploitable")
                 return None
 
             working_df = df.copy()
-            working_df["source_origin"] = source_id
-            working_df["country"] = source.get("country")
-            working_df["source_name"] = source.get("description")
-            working_df["source_provider"] = source.get("provider")
-            working_df["source_license"] = source.get("license")
+            meta_map = {
+                "source_origin": source_origin,
+                "source_country": source.get("country"),
+                "source_name": source.get("description"),
+                "source_provider": source.get("provider"),
+                "source_license": source.get("license"),
+            }
+            for column, value in meta_map.items():
+                _fill_metadata_column(working_df, column, value)
+            _fill_metadata_column(working_df, "country", source.get("country"))
 
-            working_df.attrs["source_id"] = source_id
-            working_df.attrs["country"] = source.get("country")
-            working_df.attrs["source_name"] = source.get("description")
-            working_df.attrs["source_provider"] = source.get("provider")
-            working_df.attrs["source_license"] = source.get("license")
-
-            logger.info(f"OK {source_id}: {len(working_df)} trajets rail extraits")
+            logger.info(f"OK {source_id}: {len(working_df)} lignes extraites")
             return working_df
         except Exception as exc:
             logger.error(f"ERREUR {source_id}: {exc}")
@@ -149,25 +181,21 @@ class UniversalFetcher:
     def run(self):
         sources = self.load_config()
         if not sources:
-            logger.warning("Aucune source GTFS active a extraire")
+            logger.warning("Aucune source active a extraire.")
             return []
 
-        logger.info(f"Extraction parallele lancee sur {len(sources)} sources GTFS")
+        logger.info(f"Lancement de l'extraction sur {len(sources)} sources (GTFS/CSV)")
 
         all_dfs = []
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {executor.submit(self.process_one_source, source): source for source in sources}
             for future in as_completed(futures):
                 result = future.result()
-                if result is not None and not result.empty:
+                if result is not None:
                     all_dfs.append(result)
 
-        logger.info(f"Extraction terminee : {len(all_dfs)} sources GTFS exploitables")
+        logger.info(f"Extraction terminee : {len(all_dfs)} sources pretes.")
         return all_dfs
-
-
-class MassiveFetcher(UniversalFetcher):
-    pass
 
 
 if __name__ == "__main__":

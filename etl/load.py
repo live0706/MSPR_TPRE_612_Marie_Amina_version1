@@ -2,24 +2,25 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from datetime import datetime
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+from source_config import SOURCE_FILE, load_sources
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
-RESET_DB = os.getenv("RESET_DB", "true").lower() in ("1", "true", "yes")
+RESET_DB = os.getenv("RESET_DB", "false").lower() in ("1", "true", "yes")
 
 COUNTRY_METADATA = {
-    "AT": {"name": "Austria", "keywords": ["austria", "autriche", "osterreich", "oebb", "obb", "vienna", "wien"]},
+    "AT": {"name": "Austria", "keywords": ["austria", "autriche", "osterreich", "oebb", "obb", "vienna", "wien", "wien hbf", "innsbruck", "salzburg", "graz"]},
     "BE": {"name": "Belgium", "keywords": ["belgium", "belgique", "sncb", "nmbs", "brussels", "bruxelles"]},
-    "BG": {"name": "Bulgaria", "keywords": ["bulgaria", "bulgarie", "bdz", "sofia"]},
-    "CH": {"name": "Switzerland", "keywords": ["switzerland", "suisse", "schweiz", "sbb", "cff", "zurich", "geneva", "lausanne"]},
-    "CZ": {"name": "Czech Republic", "keywords": ["czech republic", "republique tcheque", "cesko", "cd rail", "ceske drahy", "prague"]},
+    "BG": {"name": "Bulgaria", "keywords": ["bulgaria", "bulgarie", "bdz", "sofia", "varna", "burgas", "dobrich", "silistra", "plovdiv"]},
+    "CH": {"name": "Switzerland", "keywords": ["switzerland", "suisse", "schweiz", "sbb", "cff", "zurich", "zrich", "geneva", "lausanne", "basel", "bern"]},
+    "CZ": {"name": "Czech Republic", "keywords": ["czech republic", "republique tcheque", "cesko", "cd rail", "ceske drahy", "prague", "praha"]},
     "DE": {"name": "Germany", "keywords": ["germany", "allemagne", "deutschland", "deutsche bahn", "db", "berlin", "munich", "hamburg", "frankfurt", "flixtrain"]},
     "DK": {"name": "Denmark", "keywords": ["denmark", "danemark", "dsb", "copenhagen", "kobenhavn"]},
     "EE": {"name": "Estonia", "keywords": ["estonia", "estonie", "elron", "tallinn"]},
@@ -31,19 +32,21 @@ COUNTRY_METADATA = {
     "HR": {"name": "Croatia", "keywords": ["croatia", "croatie", "hzpp", "zagreb"]},
     "HU": {"name": "Hungary", "keywords": ["hungary", "hongrie", "mav", "budapest"]},
     "IE": {"name": "Ireland", "keywords": ["ireland", "irlande", "irish rail", "iarnrod eireann", "dublin"]},
-    "IT": {"name": "Italy", "keywords": ["italy", "italie", "italia", "trenitalia", "italo", "rome", "milan", "venice", "turin", "naples"]},
+    "IT": {"name": "Italy", "keywords": ["italy", "italie", "italia", "trenitalia", "italo", "rome", "roma", "roma termini", "milan", "milano", "venice", "venezia", "turin", "torino", "naples", "napoli"]},
     "LT": {"name": "Lithuania", "keywords": ["lithuania", "lituanie", "ltg", "vilnius"]},
     "LU": {"name": "Luxembourg", "keywords": ["luxembourg", "cfl", "luxemburg"]},
     "LV": {"name": "Latvia", "keywords": ["latvia", "lettonie", "pasa ieru vilciens", "riga"]},
     "NL": {"name": "Netherlands", "keywords": ["netherlands", "pays-bas", "nederland", "ns", "amsterdam", "rotterdam", "utrecht"]},
     "NO": {"name": "Norway", "keywords": ["norway", "norvege", "vy", "oslo"]},
-    "PL": {"name": "Poland", "keywords": ["poland", "pologne", "pkp", "warsaw", "warszawa", "intercity polska"]},
+    "PL": {"name": "Poland", "keywords": ["poland", "pologne", "pkp", "warsaw", "warszawa", "intercity polska", "przemysl"]},
     "PT": {"name": "Portugal", "keywords": ["portugal", "cp", "comboios", "lisbon", "lisboa", "porto"]},
-    "RO": {"name": "Romania", "keywords": ["romania", "roumanie", "cfr", "bucharest", "bucuresti"]},
+    "RO": {"name": "Romania", "keywords": ["romania", "roumanie", "cfr", "bucharest", "bucuresti", "bucureti", "braov", "brasov", "bistria", "cluj", "oradea", "timioara", "iai", "iasi", "arad", "satu mare", "vatra dornei"]},
     "RS": {"name": "Serbia", "keywords": ["serbia", "serbie", "srbija voz", "beograd", "belgrade"]},
-    "SE": {"name": "Sweden", "keywords": ["sweden", "suede", "sj", "stockholm", "snalltaget"]},
+    "SE": {"name": "Sweden", "keywords": ["sweden", "suede", "sj", "stockholm", "snalltaget", "malmo"]},
     "SI": {"name": "Slovenia", "keywords": ["slovenia", "slovenie", "sz", "slovenske zeleznice", "ljubljana"]},
     "SK": {"name": "Slovakia", "keywords": ["slovakia", "slovaquie", "zssk", "bratislava"]},
+    "TR": {"name": "Turkey", "keywords": ["turkey", "turkiye", "tcdd", "ankara", "istanbul", "izmir"]},
+    "UA": {"name": "Ukraine", "keywords": ["ukraine", "ukraina", "uz", "kyiv", "kiev", "odesa", "odessa", "kharkiv", "lviv", "dnipro", "zaporizhzhia", "chernivtsi", "uzhhorod", "pasazhyrskyi", "holovny"]},
     "ZZ": {"name": "Unknown", "keywords": []},
 }
 
@@ -86,10 +89,26 @@ COUNTRY_ALIASES = {
     "suede": "SE",
     "slovenie": "SI",
     "slovaquie": "SK",
+    "turkiye": "TR",
+    "turquie": "TR",
+    "ukraine": "UA",
 }
 
 for _country_code, _metadata in COUNTRY_METADATA.items():
     COUNTRY_ALIASES.setdefault(_metadata["name"].lower(), _country_code)
+
+
+def _normalize_search_text(value):
+    normalized_name = _normalize_name(value)
+    if normalized_name is None:
+        return None
+
+    ascii_text = unicodedata.normalize("NFKD", normalized_name)
+    ascii_text = "".join(char for char in ascii_text if not unicodedata.combining(char))
+    ascii_text = ascii_text.lower()
+    ascii_text = re.sub(r"[^a-z0-9]+", " ", ascii_text)
+    ascii_text = re.sub(r"\s+", " ", ascii_text).strip()
+    return ascii_text or None
 
 
 def _safe_text(value):
@@ -122,6 +141,24 @@ def _normalize_name(value):
     if not text_val or text_val.lower() in ("none", "nan", "null"):
         return None
     return text_val
+
+
+NORMALIZED_COUNTRY_ALIASES = {
+    normalized_alias: country_code
+    for alias, country_code in COUNTRY_ALIASES.items()
+    for normalized_alias in [_normalize_search_text(alias)]
+    if normalized_alias
+}
+NORMALIZED_COUNTRY_KEYWORDS = {
+    country_code: [
+        normalized_keyword
+        for keyword in metadata["keywords"]
+        for normalized_keyword in [_normalize_search_text(keyword)]
+        if normalized_keyword
+    ]
+    for country_code, metadata in COUNTRY_METADATA.items()
+}
+UNKNOWN_COUNTRY_CODES = {"ZZ"}
 
 
 def _normalize_scalar(value):
@@ -301,23 +338,17 @@ def get_db_engine():
         return None
 
 
+def _ensure_source_columns(engine):
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE sources ADD COLUMN IF NOT EXISTS country_code VARCHAR(10)"))
+        conn.execute(text("ALTER TABLE sources ADD COLUMN IF NOT EXISTS country_name VARCHAR(100)"))
+
+
 def _load_sources_from_file():
-    if not os.path.exists(SOURCE_FILE):
-        logger.warning("sources.json not found, skipping sources load")
-        return []
-    try:
-        with open(SOURCE_FILE, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        if not isinstance(data, list):
-            return []
-        return [
-            src
-            for src in data
-            if isinstance(src, dict) and src.get("url") and src.get("enabled") is not False
-        ]
-    except Exception as exc:
-        logger.error(f"Failed to read sources.json: {exc}")
-        return []
+    sources = load_sources(SOURCE_FILE)
+    if not sources:
+        logger.warning("No source configuration available for load")
+    return sources
 
 
 def _truncate_tables(engine):
@@ -343,6 +374,23 @@ def _truncate_tables(engine):
         )
 
 
+def _truncate_analytic_tables(engine):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                TRUNCATE
+                    facts_country_stats,
+                    facts_night_trains,
+                    dim_operators,
+                    dim_years,
+                    dim_countries
+                RESTART IDENTITY CASCADE
+                """
+            )
+        )
+
+
 def _country_name_from_code(country_code):
     return COUNTRY_METADATA.get(country_code, COUNTRY_METADATA["ZZ"])["name"]
 
@@ -356,7 +404,18 @@ def _normalize_country_code(value):
     if upper_value in COUNTRY_METADATA:
         return upper_value
 
-    return COUNTRY_ALIASES.get(normalized.lower())
+    normalized_search = _normalize_search_text(normalized)
+    if normalized_search is None:
+        return None
+
+    return NORMALIZED_COUNTRY_ALIASES.get(normalized_search)
+
+
+def _normalize_informative_country_code(value):
+    normalized_country = _normalize_country_code(value)
+    if normalized_country in UNKNOWN_COUNTRY_CODES:
+        return None
+    return normalized_country
 
 
 def _country_name_from_value(value):
@@ -366,30 +425,59 @@ def _country_name_from_value(value):
     return _normalize_name(value)
 
 
+def _fill_source_metadata_column(df, column_name, mapping):
+    existing_values = (
+        df[column_name].map(_normalize_name)
+        if column_name in df.columns
+        else pd.Series(index=df.index, dtype="object")
+    )
+    mapped_values = df["source_origin"].map(mapping).map(_normalize_name)
+    df[column_name] = existing_values.fillna(mapped_values)
+
+
+def _infer_country_code_from_values(*values):
+    haystack = " ".join(
+        normalized_chunk
+        for normalized_chunk in (_normalize_search_text(value) for value in values)
+        if normalized_chunk
+    )
+    if not haystack:
+        return None
+
+    for country_code, keywords in NORMALIZED_COUNTRY_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword in haystack:
+                return country_code
+    return None
+
+
 def _infer_country_code(row):
-    for direct_key in ("country_code", "country", "source_country", "operator_country", "origin_country", "destination_country"):
-        normalized_country = _normalize_country_code(row.get(direct_key))
+    for direct_key in (
+        "country_code",
+        "country",
+        "source_country_code",
+        "source_country",
+        "source_country_name",
+        "operator_country",
+        "origin_country",
+        "destination_country",
+    ):
+        normalized_country = _normalize_informative_country_code(row.get(direct_key))
         if normalized_country:
             return normalized_country
 
-    raw_chunks = [
+    return _infer_country_code_from_values(
         row.get("source_key"),
         row.get("source_name"),
         row.get("source_provider"),
+        row.get("source_country_name"),
         row.get("operator_name"),
         row.get("operator_country"),
         row.get("origin_city"),
         row.get("origin_country"),
         row.get("destination_city"),
         row.get("destination_country"),
-    ]
-    haystack = " ".join(str(chunk).lower() for chunk in raw_chunks if chunk)
-
-    for country_code, metadata in COUNTRY_METADATA.items():
-        for keyword in metadata["keywords"]:
-            if keyword.lower() in haystack:
-                return country_code
-    return "ZZ"
+    ) or "ZZ"
 
 
 def _build_night_train_name(row):
@@ -445,7 +533,9 @@ def _load_analytic_layer(engine):
             sd.country AS destination_country,
             s.source_key,
             s.name AS source_name,
-            s.provider AS source_provider
+            s.provider AS source_provider,
+            s.country_code AS source_country_code,
+            s.country_name AS source_country_name
         FROM trips t
         LEFT JOIN routes r ON t.route_id = r.route_id
         LEFT JOIN operators o ON r.operator_id = o.operator_id
@@ -559,6 +649,7 @@ def run_load(data):
     engine = get_db_engine()
     if not engine:
         return
+    _ensure_source_columns(engine)
 
     if isinstance(data, str) and os.path.exists(data):
         logger.info(f"Reading file: {data}")
@@ -591,6 +682,8 @@ def run_load(data):
     if RESET_DB:
         logger.info("RESET_DB active: truncating tables")
         _truncate_tables(engine)
+    else:
+        logger.info("RESET_DB inactive: cumulative transactional load enabled")
 
     sources_list = _load_sources_from_file()
     if sources_list:
@@ -604,6 +697,12 @@ def run_load(data):
                     "source_type": src.get("type"),
                     "provider": _provider_to_text(src.get("provider")),
                     "license": _license_to_text(src.get("license")),
+                    "country_code": _normalize_country_code(src.get("country")),
+                    "country_name": (
+                        _country_name_from_code(_normalize_country_code(src.get("country")))
+                        if _normalize_country_code(src.get("country"))
+                        else None
+                    ),
                     "last_seen": now,
                 }
                 for src in sources_list
@@ -616,7 +715,17 @@ def run_load(data):
                 df_sources,
                 "sources_staging",
                 "sources",
-                ["source_key", "name", "url", "source_type", "provider", "license", "last_seen"],
+                [
+                    "source_key",
+                    "name",
+                    "url",
+                    "source_type",
+                    "provider",
+                    "license",
+                    "country_code",
+                    "country_name",
+                    "last_seen",
+                ],
                 ["source_key"],
             )
 
@@ -627,24 +736,56 @@ def run_load(data):
         src.get("id"): {
             "source_name": src.get("description"),
             "source_provider": _provider_to_text(src.get("provider")),
-            "source_country": src.get("country"),
+            "source_country": _normalize_country_code(src.get("country")),
+            "source_country_name": (
+                _country_name_from_code(_normalize_country_code(src.get("country")))
+                if _normalize_country_code(src.get("country"))
+                else None
+            ),
         }
         for src in sources_list
     }
-    df_to_load["source_name"] = df_to_load["source_origin"].map(
-        lambda key: source_metadata_map.get(key, {}).get("source_name")
+    _fill_source_metadata_column(
+        df_to_load,
+        "source_name",
+        {key: value.get("source_name") for key, value in source_metadata_map.items()},
     )
-    df_to_load["source_provider"] = df_to_load["source_origin"].map(
-        lambda key: source_metadata_map.get(key, {}).get("source_provider")
+    _fill_source_metadata_column(
+        df_to_load,
+        "source_provider",
+        {key: value.get("source_provider") for key, value in source_metadata_map.items()},
     )
-    df_to_load["source_country"] = df_to_load["source_origin"].map(
-        lambda key: source_metadata_map.get(key, {}).get("source_country")
+    _fill_source_metadata_column(
+        df_to_load,
+        "source_country",
+        {key: value.get("source_country") for key, value in source_metadata_map.items()},
+    )
+    _fill_source_metadata_column(
+        df_to_load,
+        "source_country_name",
+        {key: value.get("source_country_name") for key, value in source_metadata_map.items()},
+    )
+
+    if "country" in df_to_load.columns:
+        df_to_load["country"] = df_to_load["country"].map(_normalize_name)
+    if "source_country" in df_to_load.columns:
+        df_to_load["source_country"] = df_to_load["source_country"].map(_normalize_name)
+
+    origin_country_code_series = df_to_load.apply(
+        lambda row: _infer_country_code_from_values(row.get("origin_country"), row.get("origin_city")),
+        axis=1,
+    )
+    destination_country_code_series = df_to_load.apply(
+        lambda row: _infer_country_code_from_values(row.get("destination_country"), row.get("destination_city")),
+        axis=1,
     )
 
     country_code_series = pd.Series(index=df_to_load.index, dtype="object")
     for column in ("country_code", "country", "source_country"):
         if column in df_to_load.columns:
-            country_code_series = country_code_series.fillna(df_to_load[column].map(_normalize_country_code))
+            country_code_series = country_code_series.fillna(df_to_load[column].map(_normalize_informative_country_code))
+
+    country_code_series = country_code_series.fillna(origin_country_code_series).fillna(destination_country_code_series)
 
     df_to_load["country_code"] = country_code_series
     missing_country_mask = df_to_load["country_code"].isna()
@@ -656,6 +797,18 @@ def run_load(data):
     df_to_load["country_code"] = df_to_load["country_code"].fillna("ZZ")
     df_to_load["country_name"] = df_to_load["country_code"].map(_country_name_from_code)
 
+    if "country" in df_to_load.columns:
+        current_country_codes = df_to_load["country"].map(_normalize_informative_country_code)
+        df_to_load["country"] = current_country_codes.fillna(df_to_load["country_code"])
+    else:
+        df_to_load["country"] = df_to_load["country_code"]
+
+    if "source_country" in df_to_load.columns:
+        current_source_country_codes = df_to_load["source_country"].map(_normalize_informative_country_code)
+        df_to_load["source_country"] = current_source_country_codes.fillna(df_to_load["country_code"])
+    else:
+        df_to_load["source_country"] = df_to_load["country_code"]
+
     if "origin_country" in df_to_load.columns:
         df_to_load["origin_country"] = df_to_load["origin_country"].map(_country_name_from_value)
     else:
@@ -666,6 +819,8 @@ def run_load(data):
     else:
         df_to_load["destination_country"] = None
 
+    df_to_load["origin_country"] = df_to_load["origin_country"].fillna(origin_country_code_series.map(_country_name_from_code))
+    df_to_load["destination_country"] = df_to_load["destination_country"].fillna(destination_country_code_series.map(_country_name_from_code))
     df_to_load["origin_country"] = df_to_load["origin_country"].fillna(df_to_load["country_name"])
     df_to_load["destination_country"] = df_to_load["destination_country"].fillna(df_to_load["country_name"])
 
@@ -717,6 +872,8 @@ def run_load(data):
 
     _stage_and_merge_routes(engine, df_to_load)
     _stage_and_merge_trips(engine, df_to_load)
+    logger.info("Refreshing analytic layer from all transactional trips")
+    _truncate_analytic_tables(engine)
     _load_analytic_layer(engine)
 
     logger.info("Load process completed successfully")

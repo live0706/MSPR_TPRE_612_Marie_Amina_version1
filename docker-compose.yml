@@ -27,7 +27,10 @@ services:
       PAN_MAX_FEEDS: 50
       PAN_ONLY_GTFS: "true"
       PAN_ONLY_RAIL: "true"
-      RESET_DB: "true"
+      RESET_DB: "false"
+      LONG_DISTANCE_MIN_KM: "300"
+      GTFS_MIN_SERVICE_DATE: "2015-01-01"
+      GTFS_MAX_SERVICE_DAYS: "0"
       TRANSITLAND_ENABLED: "false"
     volumes:
       - ./data:/app/data

@@ -30,6 +30,8 @@ CREATE TABLE sources (
     source_type VARCHAR(50),
     provider TEXT,
     license TEXT,
+    country_code VARCHAR(10),
+    country_name VARCHAR(100),
     last_seen TIMESTAMP
 );
 

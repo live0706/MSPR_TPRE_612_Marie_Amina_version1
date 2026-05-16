@@ -1,18 +1,48 @@
 {
-  "generated_at": "2026-04-27T22:14:27.245467Z",
+  "generated_at": "2026-05-16T17:09:42.639153Z",
   "model": "linear_regression_numpy",
   "features": [
     "distance_km"
   ],
   "target": "co2_emissions",
   "coefficients": {
-    "a": 0.0019999599185576474,
-    "b": 2.285690442870684e-05
+    "a": 0.0020000301330350156,
+    "b": -1.6966318127209468e-05
   },
   "metrics": {
-    "mae": 2.7634366093670444e-05,
-    "rmse": 3.117386865826694e-05,
-    "r2": 0.9999999858964085
+    "mae": 2.209403629748039e-05,
+    "rmse": 2.655938717788923e-05,
+    "r2": 0.9999999916221405
   },
-  "data_points": 11070
+  "data_points": 145029,
+  "coverage": {
+    "rows": 145029,
+    "operators": 51,
+    "countries": 19,
+    "sources": 4
+  },
+  "top_countries": {
+    "FR": 106682,
+    "AT": 35463,
+    "DE": 2601,
+    "UA": 101,
+    "RO": 30,
+    "IT": 30,
+    "PL": 22,
+    "HU": 14,
+    "SE": 14,
+    "TR": 14
+  },
+  "top_operators": {
+    "SNCF VOYAGEURS": 105807,
+    "OEBB Personenverkehr AG Kundenservice": 35449,
+    "\u00d6BB": 989,
+    "OCEdefault": 857,
+    "SNCF": 449,
+    "WESTbahn": 368,
+    "Flixtrain": 296,
+    "DB Fernverkehr AG": 249,
+    "UZ": 109,
+    "DB Fernverkehr (Codesharing)": 74
+  }
 }

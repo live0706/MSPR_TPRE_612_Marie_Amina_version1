@@ -1,0 +1,66 @@
+[
+  {
+    "id": "back_on_track_trip_export",
+    "type": "csv",
+    "description": "Back-on-Track Open Night Train DB (Données essentielles trains de nuit)",
+    "url": "https://docs.google.com/spreadsheets/d/15zsK-lBuibUtZ1s2FxVHvAmSu-pEuE0NDT6CAMYL2TY/gviz/tq?tqx=out:csv&sheet=view_trip_export",
+    "country": "ZZ",
+    "enabled": true
+  },
+  {
+    "id": "back_on_track_list",
+    "type": "csv",
+    "description": "Back-on-Track Open Night Train DB (Liste détaillée des lignes)",
+    "url": "https://docs.google.com/spreadsheets/d/15zsK-lBuibUtZ1s2FxVHvAmSu-pEuE0NDT6CAMYL2TY/gviz/tq?tqx=out:csv&sheet=view_ontd_list",
+    "country": "ZZ",
+    "enabled": true
+  },
+  {
+    "id": "sncf_voyageurs_national",
+    "type": "gtfs",
+    "description": "SNCF Voyageurs - Flux GTFS National (TGV, Intercités, TER)",
+    "url": "https://eu.ftp.opendatasoft.com/sncf/plandata/Export_OpenData_SNCF_GTFS_NewTripId.zip",
+    "country": "FR",
+    "enabled": true
+  },
+  {
+    "id": "db_germany_full",
+    "type": "gtfs",
+    "description": "Deutsche Bahn - Réseau Ferroviaire Allemand (GTFS complet)",
+    "url": "https://download.gtfs.de/germany/rv_free/latest.zip",
+    "country": "DE",
+    "enabled": true
+  },
+  {
+    "id": "oebb_austria_full",
+    "type": "gtfs",
+    "description": "ÖBB - Réseau Ferroviaire Autrichien (Central pour les Nightjets)",
+    "url": "https://static.web.oebb.at/open-data/soll-fahrplan-gtfs/GTFS_OP_2025_obb.zip",
+    "country": "AT",
+    "enabled": true
+  },
+  {
+    "id": "wiki_named_trains",
+    "type": "html",
+    "description": "Wikipedia - Liste des trains nommés en Europe (Enrichissement commercial)",
+    "url": "https://en.wikipedia.org/wiki/List_of_named_passenger_trains_of_Europe",
+    "country": "ZZ",
+    "enabled": true
+  },
+  {
+    "id": "european_stations_uic",
+    "type": "csv",
+    "description": "Référentiel SNCF des gares européennes (Standardisation codes UIC)",
+    "url": "https://ressources.data.sncf.com/explore/dataset/liste-des-gares/download/?format=csv",
+    "country": "ZZ",
+    "enabled": true
+  },
+  {
+    "id": "eurostat_rail_passengers",
+    "type": "csv",
+    "description": "Eurostat - Trafic voyageurs rail (Indispensable pour calcul impact CO2)",
+    "url": "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1/data/rail_pa_total?format=TSV",
+    "country": "ZZ",
+    "enabled": true
+  }
+]

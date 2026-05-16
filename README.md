@@ -38,6 +38,7 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
 ├── database/           # Couche de persistance SQL
 │   ├── init.sql        # Schéma relationnel de base
 │   └── analytics.sql   # Couche analytique (Dimensions & Faits)
+<<<<<<< HEAD
 └── etl/                # Pipeline Data Engineering (Le cœur du projet)
     ├── discover.py     # Crawling automatique des API européennes
     ├── extract.py      # Fetcher multi-threadé haute performance
@@ -45,6 +46,28 @@ L'écosystème ObRail est divisé en quatre services conteneurisés :
     ├── load.py         # Ingestion SQL optimisée
     └── main_etl.py     # Chef d'orchestre du pipeline
 ```
+=======
+└── etl/                       # Pipeline Data Engineering (Le coeur du projet)
+    ├── discover.py            # Crawling automatique des API européennes
+    ├── extract.py             # Fetcher multi-threadé haute performance
+    ├── gtfs.py                # Parser GTFS (Gestion temporelle 2010-2026)
+    ├── transform.py           # Calcul Haversine & CO2 (Seuil longue distance configurable)
+    ├── load.py                # Ingestion SQL optimisée
+    └── main_etl.py            # Chef d'orchestre du pipeline
+⚡ Fonctionnalités Avancées
+1. Ingestion Massive & Parallélisation
+Contrairement aux systèmes séquentiels, ObRail utilise un MassiveFetcher basé sur ThreadPoolExecutor. Cela permet de télécharger et de traiter simultanément plusieurs flux nationaux (SNCF, DB, ÖBB, Renfe), réduisant le temps d'ingestion de 80%.
+
+2. "Temporal Awareness" (2010-2026)
+Le module gtfs.py analyse les métadonnées de chaque flux (feed_info.txt) pour ancrer les données temporelles. Cette approche permet de traiter sans distinction des archives de 2010 et des prévisions de 2026 au sein d'un même référentiel.
+
+3. Schéma Analytique (Warehouse)
+Le projet implémente un modèle en étoile pour optimiser les performances de lecture :
+
+Faits : facts_night_trains (Indicateurs par trajet), facts_country_stats (Agrégats nationaux).
+
+Dimensions : dim_countries, dim_operators, dim_years.
+>>>>>>> 471bd73 (version pour mspr5612)
 
 🚀 Guide de démarrage
 1. Lancement avec Docker Compose
@@ -75,7 +98,11 @@ Frontend : Streamlit
 Infrastructure : Docker, PostgreSQL 15
 
 📊 Indicateurs Clés (KPI)
+<<<<<<< HEAD
 Connectivité : Analyse des trajets ferroviaires supérieurs à 100 km (Longue Distance).
+=======
+Connectivite : Analyse des trajets ferroviaires longue distance selon un seuil configurable.
+>>>>>>> 471bd73 (version pour mspr5612)
 
 Impact Éco : Calcul des émissions de CO2 basé sur les facteurs d'émission réels des réseaux nationaux.
 

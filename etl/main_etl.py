@@ -5,10 +5,10 @@ from extract import UniversalFetcher
 from load import run_load
 from model import train_co2_model
 from quality import write_quality_report
+from source_config import SOURCE_FILE, materialize_sources_file
 from transform import run_transform
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SOURCE_FILE = os.path.join(BASE_DIR, "sources.json")
 DATA_DIR = os.getenv("DATA_DIR") or os.path.abspath(os.path.join(BASE_DIR, "..", "data"))
 PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
 
@@ -19,10 +19,14 @@ def main():
     time.sleep(15)
 
     print("\n--- ETAPE 0 : CHARGEMENT DES SOURCES ---")
-    print(f"Configuration source utilisee : {SOURCE_FILE}")
+    refresh_sources = os.getenv("REFRESH_SOURCES", "false").lower() in ("1", "true", "yes")
+    source_file, configured_sources, source_mode = materialize_sources_file(force_refresh=refresh_sources)
+    print(f"Configuration source utilisee : {source_file}")
+    print(f"Mode de resolution des sources : {source_mode or 'aucune source'}")
+    print(f"Sources disponibles pour l'extraction : {len(configured_sources)}")
 
     print("\n--- ETAPE 1 : EXTRACTION ---")
-    fetcher = UniversalFetcher(SOURCE_FILE)
+    fetcher = UniversalFetcher(source_file or SOURCE_FILE)
     raw_dfs_list = fetcher.run()
 
     print("\n--- ETAPE 2 : TRANSFORMATION ---")
@@ -43,6 +47,8 @@ def main():
 
         write_quality_report(clean_df, PROCESSED_DIR)
         train_co2_model(clean_df, PROCESSED_DIR)
+    else:
+        print("Aucune donnee transformee exploitable n'a ete produite.")
 
     print("\n--- ETAPE 3 : CHARGEMENT (LOAD) ---")
     run_load(clean_df)

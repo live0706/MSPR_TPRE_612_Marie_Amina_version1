@@ -14,6 +14,8 @@ class Source(Base):
     source_type = Column(String)
     provider = Column(String)
     license = Column(String)
+    country_code = Column(String)
+    country_name = Column(String)
     last_seen = Column(DateTime)
 
 
