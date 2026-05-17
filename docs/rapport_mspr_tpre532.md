@@ -1,8 +1,8 @@
-# Rapport MSPR TPRE532 - Base de redaction
+# Rapport MSPR TPRE532 - Trame de redaction
 
 > Document de travail a utiliser comme base de rapport MSPR EPSI TPRE532.
-> Ce fichier peut etre complete manuellement ou reutilise comme contexte pour ChatGPT
-> une fois le projet pousse sur GitHub.
+> Ce fichier peut etre complete et adapte en fonction de l'etat final du depot,
+> des captures et des resultats obtenus au moment du rendu.
 
 ---
 
@@ -480,55 +480,7 @@ Le choix d'une solution pragmatique basee sur FastAPI, PostgreSQL, React, Docker
 
 ---
 
-## 16. Prompt pret a reutiliser avec ChatGPT apres push GitHub
-
-Tu peux reutiliser le bloc ci-dessous quand le repo sera pousse.
-
-```text
-Tu es un expert senior en architecture logicielle, FastAPI, data engineering, Docker, CI/CD, monitoring, documentation technique et redaction de rapport MSPR.
-
-Je vais te donner :
-1. le lien GitHub de mon projet
-2. un brouillon de rapport en Markdown
-
-Ta mission :
-- analyser le depot
-- relire le brouillon
-- produire un rapport final professionnel, fluide et coherent
-- conserver les parties techniques importantes
-- reformuler dans un style de rapport MSPR
-- structurer le document avec :
-  - introduction
-  - contexte
-  - objectifs
-  - diagnostic initial
-  - architecture cible
-  - choix techniques
-  - implementation backend
-  - implementation frontend
-  - ETL et data
-  - Docker et deploiement
-  - tests
-  - CI/CD
-  - monitoring
-  - securite / RGPD / accessibilite
-  - maintenance / rollback
-  - limites et perspectives
-  - conclusion
-- integrer des transitions propres entre les sections
-- rester factuel, technique et presentable devant un jury EPSI
-- proposer a la fin une version plus courte pour l'oral
-
-Repo GitHub :
-`COLLER ICI LE LIEN DU REPO`
-
-Brouillon de rapport :
-`COLLER ICI LE CONTENU DE docs/rapport_mspr_tpre532.md`
-```
-
----
-
-## 17. Notes personnelles a completer avant rendu
+## 16. Notes personnelles a completer avant rendu
 
 - URL du repo GitHub :
 - noms des membres :
