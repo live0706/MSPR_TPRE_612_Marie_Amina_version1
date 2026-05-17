@@ -10,6 +10,7 @@ from config import APP_DESCRIPTION, APP_NAME, APP_VERSION, CORS_ORIGINS, ENABLE_
 from database import dispose_engine, init_engine
 from errors import register_exception_handlers
 from logging_config import configure_logging
+from metrics import register_business_metrics
 from routers import analysis, countries, dashboard, metadata, operators, statistics, trains
 from routers.health import router as health_router
 from routers.journeys import router as journeys_router
@@ -104,6 +105,7 @@ app.include_router(metadata.router)
 app.include_router(legacy_router)
 
 if ENABLE_PROMETHEUS and Instrumentator is not None:
+    register_business_metrics()
     Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,

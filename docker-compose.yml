@@ -76,24 +76,19 @@ services:
       - obrail_net
 
   dashboard:
-    build: ./dashboard
+    build: ./frontend
     container_name: obrail_dashboard
     restart: unless-stopped
-    env_file: .env
     depends_on:
       api:
         condition: service_healthy
-    environment:
-      API_URL: http://api:8000
-      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://localhost:9090}
-      GRAFANA_URL: ${GRAFANA_URL:-http://localhost:3000}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5).read()\""]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
       interval: 15s
       timeout: 5s
       retries: 10
     ports:
-      - "8501:8501"
+      - "8501:80"
     networks:
       - obrail_net
 
@@ -107,6 +102,34 @@ services:
       - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     ports:
       - "9115:9115"
+    networks:
+      - obrail_net
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: obrail_loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/config.yml"
+    volumes:
+      - ./monitoring/loki/config.yml:/etc/loki/config.yml:ro
+    ports:
+      - "3100:3100"
+    networks:
+      - obrail_net
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: obrail_promtail
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    depends_on:
+      loki:
+        condition: service_started
+    volumes:
+      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./data/logs:/var/log/obrail:ro
     networks:
       - obrail_net
 
@@ -136,6 +159,8 @@ services:
     restart: unless-stopped
     depends_on:
       prometheus:
+        condition: service_started
+      loki:
         condition: service_started
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}

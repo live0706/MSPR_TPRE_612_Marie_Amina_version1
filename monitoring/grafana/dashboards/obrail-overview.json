@@ -48,8 +48,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
+        "h": 6,
+        "w": 3,
         "x": 0,
         "y": 0
       },
@@ -77,7 +77,7 @@
           "refId": "A"
         }
       ],
-      "title": "Disponibilite /health",
+      "title": "API Health",
       "type": "stat"
     },
     {
@@ -87,20 +87,35 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 6,
+        "h": 6,
+        "w": 3,
+        "x": 3,
         "y": 0
       },
       "id": 2,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
@@ -115,13 +130,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total[5m]))",
-          "legendFormat": "Requetes/s",
+          "expr": "probe_success{job=\"obrail_dashboard_health\"}",
+          "legendFormat": "Dashboard UI",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Debit HTTP",
+      "title": "UI Health",
       "type": "stat"
     },
     {
@@ -131,14 +146,29 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 12,
+        "h": 6,
+        "w": 3,
+        "x": 6,
         "y": 0
       },
       "id": 3,
@@ -159,13 +189,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_request_duration_seconds_sum[5m])) / clamp_min(sum(rate(http_request_duration_seconds_count[5m])), 0.0001)",
-          "legendFormat": "Latence moyenne",
+          "expr": "obrail_database_connected",
+          "legendFormat": "PostgreSQL",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Latence moyenne API",
+      "title": "DB Health",
       "type": "stat"
     },
     {
@@ -175,19 +205,19 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
+        "h": 6,
+        "w": 3,
+        "x": 9,
         "y": 0
       },
       "id": 4,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
@@ -203,14 +233,307 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 0.0001)",
-          "legendFormat": "Taux erreurs 5xx",
+          "expr": "obrail_total_trips",
+          "legendFormat": "Trajets",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Taux d'erreurs 5xx",
+      "title": "Trajets Totaux",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 12,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "obrail_total_countries",
+          "legendFormat": "Pays",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pays Couverts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 15,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "obrail_total_operators",
+          "legendFormat": "Operateurs",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Operateurs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 18,
+        "y": 0
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "obrail_total_night_trips",
+          "legendFormat": "Nuit",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Trajets Nuit",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 21,
+        "y": 0
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "obrail_total_day_trips",
+          "legendFormat": "Jour",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Trajets Jour",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_request_duration_seconds_sum[5m])) / clamp_min(sum(rate(http_request_duration_seconds_count[5m])), 0.0001)",
+          "legendFormat": "Latence moyenne",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latence Moyenne API",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "legendFormat": "Requetes/s",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Debit HTTP",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 0.0001)",
+          "legendFormat": "Erreurs 5xx",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Taux Erreurs 5xx",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -225,9 +548,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 13
       },
-      "id": 5,
+      "id": 12,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -246,7 +569,7 @@
           "refId": "A"
         }
       ],
-      "title": "Requetes par endpoint",
+      "title": "Requetes par Endpoint",
       "type": "timeseries"
     },
     {
@@ -255,16 +578,18 @@
         "uid": "obrail-prometheus"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "unit": "s"
+        },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 12,
-        "y": 7
+        "y": 13
       },
-      "id": 6,
+      "id": 13,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -283,8 +608,84 @@
           "refId": "A"
         }
       ],
-      "title": "Temps de reponse des probes",
+      "title": "Temps de Reponse des Probes",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "obrail-prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 13
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "time() - obrail_latest_ingestion_timestamp_seconds",
+          "legendFormat": "Age derniere ingestion",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Fraicheur Ingestion",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "obrail-loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 15,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "expr": "{job=\"obrail_logs\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs API",
+      "type": "logs"
     }
   ],
   "refresh": "15s",
@@ -306,6 +707,6 @@
   "timezone": "",
   "title": "ObRail Overview",
   "uid": "obrail-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

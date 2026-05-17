@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-16T17:09:42.639153Z",
+  "generated_at": "2026-05-16T19:47:43.467466Z",
   "model": "linear_regression_numpy",
   "features": [
     "distance_km"

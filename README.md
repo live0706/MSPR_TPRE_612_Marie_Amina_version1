@@ -1,6 +1,6 @@
 # ObRail Europe - MSPR TPRE532
 
-ObRail Europe est une solution de data engineering et de restitution ferroviaire europeenne industrialisee pour la MSPR EPSI TPRE532. Le projet assemble un ETL Python, une API FastAPI, une base PostgreSQL, un dashboard Streamlit et une couche d'observabilite Prometheus/Grafana.
+ObRail Europe est une solution de data engineering et de restitution ferroviaire europeenne industrialisee pour la MSPR EPSI TPRE532. Le projet assemble un ETL Python, une API FastAPI, une base PostgreSQL, un frontend React cartographique et une couche d'observabilite Prometheus/Grafana.
 
 ## Objectifs
 
@@ -15,9 +15,11 @@ ObRail Europe est une solution de data engineering et de restitution ferroviaire
 - `db` : PostgreSQL 15
 - `etl` : pipeline batch d'extraction / transformation / chargement
 - `api` : FastAPI sur `http://localhost:8000`
-- `dashboard` : Streamlit sur `http://localhost:8501`
+- `dashboard` : frontend React cartographique sur `http://localhost:8501`
 - `prometheus` : supervision metrics sur `http://localhost:9090`
 - `grafana` : dashboards sur `http://localhost:3000`
+- `loki` : centralisation des logs sur `http://localhost:3100`
+- `promtail` : collecte des logs applicatifs vers Loki
 - `blackbox` : probes HTTP pour `/health`
 
 ## Endpoints principaux
@@ -38,13 +40,13 @@ ObRail Europe est une solution de data engineering et de restitution ferroviaire
 cp .env.example .env
 ```
 
-2. Démarrer la stack :
+2. Demarrer la stack :
 
 ```bash
 docker compose up -d --build
 ```
 
-3. Lancer un chargement ETL si nécessaire :
+3. Lancer un chargement ETL si necessaire :
 
 ```bash
 docker compose run --rm etl
@@ -56,6 +58,13 @@ Tests Python :
 
 ```bash
 pytest
+```
+
+Tests frontend :
+
+```bash
+cd frontend
+npm test
 ```
 
 Tests dans le conteneur API :
@@ -71,6 +80,7 @@ docker compose run --rm api pytest
 - [Tests](docs/tests.md)
 - [CI/CD](docs/cicd.md)
 - [Monitoring](docs/monitoring.md)
+- [Conformite cahier des charges](docs/conformite_mspr_tpre532.md)
 - [RGPD, accessibilite, securite](docs/rgpd_accessibilite_securite.md)
 - [Maintenance et rollback](docs/maintenance_rollback.md)
 - [Plan de soutenance](docs/soutenance_plan.md)
@@ -81,6 +91,7 @@ docker compose run --rm api pytest
 .
 |-- api/
 |-- dashboard/
+|-- frontend/
 |-- database/
 |-- etl/
 |-- monitoring/
@@ -93,5 +104,5 @@ docker compose run --rm api pytest
 ## Remarques MSPR
 
 - l'ETL est conserve en batch pour ne pas coupler la collecte au runtime de l'API
-- le dashboard Streamlit est garde pour privilegier une solution simple, robuste et demo-friendly
-- Prometheus, Blackbox et Grafana couvrent la disponibilite, la latence, le taux d'erreur et la sante HTTP
+- le frontend React fournit une experience plus presentable pour la soutenance, avec carte interactive, filtres et monitoring
+- Prometheus, Blackbox, Loki et Grafana couvrent la disponibilite, la latence, le taux d'erreur, la sante HTTP et les logs applicatifs

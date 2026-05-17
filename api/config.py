@@ -27,5 +27,6 @@ REPO_ROOT = BASE_DIR.parent
 DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 QUALITY_REPORT_PATH = Path(os.getenv("QUALITY_REPORT_PATH", str(DATA_DIR / "processed" / "quality_report.json")))
 MODEL_METRICS_PATH = Path(os.getenv("MODEL_METRICS_PATH", str(DATA_DIR / "processed" / "model_metrics.json")))
+APP_LOG_PATH = Path(os.getenv("APP_LOG_PATH", str(DATA_DIR / "logs" / "api.log")))
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
 GRAFANA_URL = os.getenv("GRAFANA_URL", "http://localhost:3000")

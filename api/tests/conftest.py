@@ -6,8 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-API_DIR = REPO_ROOT / "api"
+TESTS_DIR = Path(__file__).resolve().parent
+if (TESTS_DIR.parent / "main.py").exists():
+    API_DIR = TESTS_DIR.parent
+else:
+    API_DIR = TESTS_DIR.parents[1] / "api"
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 

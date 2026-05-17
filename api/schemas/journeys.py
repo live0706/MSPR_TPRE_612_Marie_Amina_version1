@@ -10,8 +10,12 @@ class JourneySummary(BaseModel):
     operator_name: Optional[str] = None
     origin_city: Optional[str] = None
     origin_country: Optional[str] = None
+    origin_lat: Optional[float] = None
+    origin_lon: Optional[float] = None
     destination_city: Optional[str] = None
     destination_country: Optional[str] = None
+    destination_lat: Optional[float] = None
+    destination_lon: Optional[float] = None
     departure_time: Optional[datetime] = None
     arrival_time: Optional[datetime] = None
     service_type: Optional[str] = None
