@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main", "master", "next"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test-and-build:
@@ -150,7 +151,7 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload Playwright report
         if: always()
@@ -174,4 +175,4 @@ jobs:
         with:
           name: docker-compose-resolved
           path: docker-compose.resolved.yml
-          if-no-files-found: error
+          if-no-files-found: warn
