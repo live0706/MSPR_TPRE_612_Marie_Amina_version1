@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const HOST = "127.0.0.1";
 const PORT = 4173;
 const BASE_URL = `http://${HOST}:${PORT}/`;
-const TARGET_BASE_URL = process.env.PLAYWRIGHT_BASE_URL || BASE_URL;
+const TARGET_BASE_URL = normalizeUrl(process.env.PLAYWRIGHT_BASE_URL || BASE_URL);
 const PLAYWRIGHT_ARGS = ["playwright", "test", ...process.argv.slice(2)];
 const NPX_COMMAND = process.platform === "win32" ? "npx.cmd" : "npx";
 const MIME_TYPES = {
@@ -23,6 +23,10 @@ const MIME_TYPES = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
+
+function normalizeUrl(value) {
+  return new URL(value).toString();
+}
 
 async function isServerAlreadyRunning(url) {
   try {
@@ -85,7 +89,7 @@ async function run() {
   let ownsServer = false;
 
   try {
-    const useEmbeddedStaticServer = TARGET_BASE_URL === BASE_URL;
+    const useEmbeddedStaticServer = TARGET_BASE_URL === normalizeUrl(BASE_URL);
 
     if (useEmbeddedStaticServer && !existsSync(path.join(DIST_DIR, "index.html"))) {
       throw new Error("Le build frontend est absent. Lance d'abord `npm run build`.");

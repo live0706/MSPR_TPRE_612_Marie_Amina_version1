@@ -146,7 +146,7 @@ jobs:
       - name: Run frontend E2E tests
         working-directory: frontend
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173/
         run: npm run e2e
 
       - name: Validate docker-compose
