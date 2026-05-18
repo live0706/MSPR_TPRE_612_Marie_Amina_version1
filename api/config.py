@@ -7,7 +7,10 @@ def _get_bool(name: str, default: bool) -> bool:
 
 
 def _get_origins() -> list[str]:
-    raw_value = os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501")
+    raw_value = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:8501,http://127.0.0.1:8501,http://localhost:4173,http://127.0.0.1:4173",
+    )
     return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
 
 

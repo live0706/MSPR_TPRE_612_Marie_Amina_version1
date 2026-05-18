@@ -1,6 +1,6 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 
-import { fetchBootstrapData, fetchJourneyDetail } from "./api";
+import { fetchBootstrapData, fetchJourneyDetail, getApiPublicUrl } from "./api";
 import JourneyTable from "./components/JourneyTable";
 import MapPanel from "./components/MapPanel";
 import StatusBadge from "./components/StatusBadge";
@@ -159,29 +159,27 @@ export default function App() {
   const comparisonBlocks = [
     {
       label: "Trajets",
-      unit: "",
       dayValue: Number(dayStats?.train_count || 0),
       nightValue: Number(nightStats?.train_count || 0),
       formatter: (value) => formatCompact(value)
     },
     {
       label: "Distance moyenne",
-      unit: " km",
       dayValue: Number(dayStats?.avg_distance_km || 0),
       nightValue: Number(nightStats?.avg_distance_km || 0),
       formatter: (value) => `${Math.round(value)} km`
     },
     {
       label: "CO2 moyen",
-      unit: "",
       dayValue: Number(dayStats?.avg_co2_emissions || 0),
       nightValue: Number(nightStats?.avg_co2_emissions || 0),
       formatter: (value) => formatMetric(value, 3)
     }
   ];
+  const apiDocsUrl = getApiPublicUrl("/api/docs");
 
   return (
-    <div className="app-shell app-shell--mockup">
+    <div className="app-shell app-shell--mockup" data-testid="app-shell">
       <header className="topbar panel">
         <div className="brand">
           <div className="brand__mark" aria-hidden="true">
@@ -194,7 +192,7 @@ export default function App() {
         </div>
 
         <nav className="topbar__nav">
-          <a href="/api/docs" target="_blank" rel="noreferrer">
+          <a href={apiDocsUrl} target="_blank" rel="noreferrer">
             API Documentation
           </a>
         </nav>
@@ -212,13 +210,14 @@ export default function App() {
       </header>
 
       <section className="workspace-frame panel">
-        <aside className="search-panel">
+        <aside className="search-panel" data-testid="search-panel">
           <div className="search-panel__title">Filtres de Recherche</div>
           <div className="search-panel__body">
             <div className="form-grid form-grid--mockup">
               <label>
                 Recherche
                 <input
+                  data-testid="search-input"
                   type="search"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
@@ -229,6 +228,7 @@ export default function App() {
               <label>
                 Pays / Zone
                 <select
+                  data-testid="country-filter"
                   value={filters.country_code}
                   onChange={(event) =>
                     setFilters((current) => ({ ...current, country_code: event.target.value }))
@@ -246,6 +246,7 @@ export default function App() {
               <label>
                 Operateur
                 <select
+                  data-testid="operator-filter"
                   value={filters.operator_name}
                   onChange={(event) =>
                     setFilters((current) => ({ ...current, operator_name: event.target.value }))
@@ -263,6 +264,7 @@ export default function App() {
               <label>
                 Type de service
                 <select
+                  data-testid="service-filter"
                   value={filters.service_type}
                   onChange={(event) =>
                     setFilters((current) => ({ ...current, service_type: event.target.value }))
@@ -277,6 +279,7 @@ export default function App() {
               <label>
                 Annee
                 <input
+                  data-testid="year-filter"
                   type="number"
                   min="2015"
                   max="2100"
@@ -291,6 +294,7 @@ export default function App() {
               <label>
                 Volume affiche
                 <select
+                  data-testid="limit-filter"
                   value={String(filters.limit)}
                   onChange={(event) =>
                     setFilters((current) => ({ ...current, limit: Number(event.target.value) }))
@@ -307,6 +311,7 @@ export default function App() {
               <button
                 type="button"
                 className="button button--primary"
+                data-testid="search-button"
                 onClick={() => setFilters((current) => ({ ...current }))}
               >
                 Rechercher
@@ -314,6 +319,7 @@ export default function App() {
               <button
                 type="button"
                 className="button button--secondary"
+                data-testid="reset-button"
                 onClick={() => {
                   setSearchInput("");
                   setFilters(INITIAL_FILTERS);
@@ -323,10 +329,10 @@ export default function App() {
               </button>
             </div>
 
-            <div className="search-panel__status">
+            <div className="search-panel__status" data-testid="api-health-card">
               <div>
                 <span>Etat API</span>
-                <StatusBadge status={healthStatus} />
+                <StatusBadge status={healthStatus} dataTestId="api-status-badge" />
               </div>
               <div>
                 <span>Derniere ingestion</span>
@@ -334,7 +340,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="selected-compact">
+            <div className="selected-compact" data-testid="selected-journey-card">
               <span>Trajet actif</span>
               <strong>{selectedJourney?.operator_name || "Aucune selection"}</strong>
               <p>{activeRouteLabel}</p>
@@ -350,11 +356,13 @@ export default function App() {
         </aside>
 
         <div className="content-panel">
-          <section className="headline-card panel">
+          <section className="headline-card panel" data-testid="headline-card">
             <div className="headline-card__inner">
               <p className="eyebrow">Impact Carbone</p>
               <h1>Reduction de CO2</h1>
-              <div className="headline-card__value">{Math.round(reductionPotential)}%</div>
+              <div className="headline-card__value" data-testid="co2-reduction-value">
+                {Math.round(reductionPotential)}%
+              </div>
               <p className="headline-card__note">
                 Potentielle entre le segment le plus emetteur et le segment le plus efficace
                 observe sur les trajets visibles.
@@ -362,14 +370,14 @@ export default function App() {
             </div>
           </section>
 
-          <section className="summary-row">
-            <article className="summary-card panel">
+          <section className="summary-row" data-testid="summary-row">
+            <article className="summary-card panel" data-testid="summary-operator-card">
               <span className="summary-card__label">Operateur dominant</span>
               <strong>{dominantOperator?.operator || "Non disponible"}</strong>
               <p>{dominantOperator ? `${dominantOperator.count} trajets visibles` : "Aucune donnee"}</p>
             </article>
 
-            <article className="summary-card panel">
+            <article className="summary-card panel" data-testid="summary-country-card">
               <span className="summary-card__label">Pays leader</span>
               <strong>
                 {leadingCountry
@@ -383,7 +391,7 @@ export default function App() {
               </p>
             </article>
 
-            <article className="summary-card panel">
+            <article className="summary-card panel" data-testid="summary-coverage-card">
               <span className="summary-card__label">Vue courante</span>
               <strong>{formatCompact(journeys.length)} trajets - {formatCompact(visibleCountryCount)} pays</strong>
               <p>{split.nightShare}% nuit / {split.dayShare}% jour</p>
@@ -398,7 +406,7 @@ export default function App() {
             </section>
           ) : null}
 
-          <section className="comparison-module panel">
+          <section className="comparison-module panel" data-testid="comparison-module">
             <div className="module-title">Comparatif Ferroviaire</div>
             <div className="comparison-grid">
               {comparisonBlocks.map((block) => {
@@ -432,7 +440,7 @@ export default function App() {
             </div>
           </section>
 
-          <section className="map-module">
+          <section className="map-module" data-testid="map-module">
             <div className="module-title">Carte Europeenne</div>
             <MapPanel
               journeys={mapJourneys}
@@ -442,7 +450,7 @@ export default function App() {
             />
           </section>
 
-          <section className="table-module">
+          <section className="table-module" data-testid="table-module">
             <div className="module-title">Detail des Offres</div>
             <JourneyTable
               journeys={journeys}

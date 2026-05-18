@@ -5,7 +5,7 @@
 - verifier `docker compose ps`
 - surveiller `GET /health`
 - consulter les logs `docker compose logs -f`
-- verifier `http://localhost:9090/targets` et `http://localhost:3100/ready`
+- verifier `http://localhost:9090/api/v1/targets`
 - rejouer l'ETL en cas de mise a jour source
 
 ## Sauvegarde
@@ -36,4 +36,4 @@ docker compose up -d --build
 - `health` en erreur : verifier la disponibilite PostgreSQL
 - frontend vide : verifier que l'ETL a bien charge les donnees
 - Grafana vide : verifier Prometheus et la presence des fichiers de provisioning
-- logs absents dans Grafana : verifier `data/logs/api.log`, `promtail` et `loki`
+- logs absents ou insuffisants : verifier `data/logs/api.log` et `docker compose logs -f api`

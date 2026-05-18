@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-La solution cible se compose d'un pipeline ETL batch, d'une base PostgreSQL, d'une API FastAPI, d'un frontend React cartographique et d'une pile d'observabilite Prometheus/Grafana/Loki.
+La solution cible se compose d'un pipeline ETL batch, d'une base PostgreSQL, d'une API FastAPI, d'un frontend React cartographique et d'une pile d'observabilite Prometheus/Grafana.
 
 ```mermaid
 flowchart LR
@@ -11,12 +11,7 @@ flowchart LR
     C --> D[FastAPI]
     D --> E[Frontend React]
     D --> F[Prometheus]
-    D --> I[Loki]
-    J[Promtail] --> I
     F --> G[Grafana]
-    H[Blackbox Exporter] --> F
-    H --> D
-    I --> G
 ```
 
 ## Choix techniques
@@ -24,7 +19,7 @@ flowchart LR
 - `FastAPI` : expose rapidement une API documentee avec validation Pydantic et Swagger.
 - `PostgreSQL` : convient au stockage relationnel et analytique du projet.
 - `React + Leaflet` : apporte une interface plus professionnelle, une carte interactive et une meilleure lisibilite pour la soutenance.
-- `Prometheus + Grafana + Loki` : couvre la supervision de disponibilite, latence, erreurs et logs applicatifs.
+- `Prometheus + Grafana` : couvre la supervision de disponibilite, latence, erreurs et indicateurs metier.
 - `Docker Compose` : simplifie l'orchestration locale et la soutenance.
 
 ## Flux applicatif
@@ -33,9 +28,9 @@ flowchart LR
 2. Les donnees consolidees sont chargees dans PostgreSQL.
 3. FastAPI interroge la couche transactionnelle et analytique.
 4. Le frontend React consomme les endpoints `/trajets`, `/stats/volumes`, `/health`.
-5. Prometheus scrape `/metrics` et sonde `/health` via Blackbox Exporter.
-6. L'API ecrit aussi ses logs dans `data/logs/api.log`, lus par Promtail puis envoyes vers Loki.
-7. Grafana visualise les indicateurs de supervision et les logs.
+5. Prometheus scrape `/metrics`, y compris les metriques derivees de `/health`.
+6. L'API ecrit aussi ses logs dans `data/logs/api.log` et sur la sortie standard Docker.
+7. Grafana visualise les indicateurs de supervision et les metriques metier.
 
 ## Architecture cible du backend
 

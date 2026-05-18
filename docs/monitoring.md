@@ -3,20 +3,19 @@
 ## Stack retenue
 
 - `Prometheus` pour la collecte des metriques
-- `Blackbox Exporter` pour les probes HTTP
-- `Grafana` pour la visualisation
-- `Loki` pour le stockage des logs
-- `Promtail` pour l'expedition des logs applicatifs
+- `Grafana` pour la visualisation et le pilotage des indicateurs
+- logs applicatifs conserves dans `data/logs/api.log` et consultables aussi via `docker compose logs`
 
 ## Indicateurs suivis
 
-- disponibilite de l'API via `probe_success`
-- disponibilite de `/health`
+- disponibilite de l'API via la metrique `up{job="obrail_api"}`
+- etat global de `/health` via `obrail_api_healthy`
+- etat PostgreSQL via `obrail_database_connected`
+- disponibilite des artefacts ETL via `obrail_quality_report_available` et `obrail_model_metrics_available`
 - latence moyenne API
 - debit HTTP
 - taux d'erreurs 5xx
-- sante du frontend React
-- volumetrie metier exposee en metriques Prometheus natives
+- volumes metier exposes en metriques Prometheus natives
 - fraicheur de la derniere ingestion
 - resume de volumes et d'ingestion via `/api/monitoring/summary`
 
@@ -25,7 +24,6 @@
 - metriques Prometheus : `GET /metrics`
 - sante : `GET /health`
 - resume d'observabilite : `GET /api/monitoring/summary`
-- readiness Loki : `GET http://localhost:3100/ready`
 
 ## Grafana
 
@@ -35,36 +33,39 @@ Le dashboard `ObRail Overview` est provisionne automatiquement depuis :
 
 Il presente notamment :
 
-- disponibilite API / UI / base
+- disponibilite API et sante `/health`
+- etat base PostgreSQL
 - nombre total de trajets, pays et operateurs
 - repartition jour / nuit
+- disponibilite des artefacts ETL
 - latence moyenne
 - debit HTTP
 - taux d'erreurs
 - requetes par endpoint
 - fraicheur de l'ingestion
-- logs applicatifs issus de Loki
 
 Si Grafana a deja ete initialise une premiere fois, le mot de passe reel reste celui stocke dans son volume persistant, meme si `.env` change ensuite.
 
 ## Logs applicatifs
 
 L'API ecrit les logs sur la sortie standard et dans `data/logs/api.log`.
-`Promtail` lit ce fichier et l'envoie a `Loki`, ce qui permet leur consultation depuis Grafana.
 
 Commandes utiles :
 
 ```bash
 docker compose logs -f api
-docker compose logs -f promtail
-docker compose logs -f loki
 docker compose logs -f dashboard
+docker compose logs -f prometheus
+docker compose logs -f grafana
 docker compose logs -f etl
 ```
 
 ## Metriques metier exposees
 
+- `obrail_api_healthy`
 - `obrail_database_connected`
+- `obrail_quality_report_available`
+- `obrail_model_metrics_available`
 - `obrail_total_trips`
 - `obrail_total_countries`
 - `obrail_total_operators`
@@ -75,4 +76,4 @@ docker compose logs -f etl
 ## Limites connues
 
 - pas d'alerting Grafana active dans cette version
-- pas de retention longue duree configuree pour Loki au-dela du stockage local du conteneur
+- pas de centralisation de logs dans Grafana dans cette version

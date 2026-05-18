@@ -3,6 +3,7 @@ from __future__ import annotations
 from prometheus_client import Gauge
 
 from database import fetch_one, ping_database
+from health_state import application_health_score, model_metrics_score, quality_report_score
 
 _METRICS_REGISTERED = False
 
@@ -27,6 +28,21 @@ def register_business_metrics() -> None:
         "obrail_database_connected",
         "Etat de connexion PostgreSQL de l'application ObRail.",
     ).set_function(lambda: 1.0 if ping_database() else 0.0)
+
+    Gauge(
+        "obrail_api_healthy",
+        "Etat global de l'endpoint /health de l'application ObRail.",
+    ).set_function(application_health_score)
+
+    Gauge(
+        "obrail_quality_report_available",
+        "Disponibilite du rapport de qualite genere par l'ETL.",
+    ).set_function(quality_report_score)
+
+    Gauge(
+        "obrail_model_metrics_available",
+        "Disponibilite des metriques modele generees par l'ETL.",
+    ).set_function(model_metrics_score)
 
     Gauge(
         "obrail_total_trips",

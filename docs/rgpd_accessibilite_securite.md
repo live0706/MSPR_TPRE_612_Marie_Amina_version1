@@ -4,7 +4,7 @@
 
 - les donnees manipulees sont ferroviaires et non personnelles
 - aucune donnee voyageur nominative n'est exposee
-- les journaux applicatifs centralises dans Loki ne doivent pas contenir d'information sensible
+- les journaux applicatifs exposes via les conteneurs et `data/logs/api.log` ne doivent pas contenir d'information sensible
 - les mots de passe et secrets transitent par variables d'environnement
 
 ## Accessibilite

@@ -9,7 +9,6 @@ tests/tmp_runs/
 tests/__pycache__/
 py_mkdir_test/
 tmp_test/
-pytest.ini
 data/raw
 data/processed
 data/logs/

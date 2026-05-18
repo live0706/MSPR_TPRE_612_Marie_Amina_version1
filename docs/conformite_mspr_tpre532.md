@@ -28,7 +28,7 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 | Voir l'etat de sante API | OK | badge et bloc monitoring |
 | Afficher le monitoring | OK | liens Swagger / Prometheus / Grafana + resume |
 | Ergonomie / accessibilite | PARTIEL | contrastes, focus, libelles clairs ; audit RGAA complet restant a faire |
-| Tests frontend | OK | `frontend/tests/utils.test.js` via `npm test` |
+| Tests frontend | OK | tests unitaires Node + E2E Playwright |
 
 ## 3. Docker / Production
 
@@ -37,7 +37,7 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 | Dockerfile backend | OK | `api/Dockerfile` |
 | Dockerfile frontend/dashboard | OK | `frontend/Dockerfile` |
 | Dockerfile ETL | OK | `etl/Dockerfile` |
-| `docker-compose.yml` complet | OK | DB, ETL, API, frontend, blackbox, prometheus, grafana, loki, promtail |
+| `docker-compose.yml` complet | OK | DB, ETL, API, frontend, prometheus, grafana |
 | Lancement `docker compose up -d --build` | OK | documente dans `README.md` et `docs/deploiement.md` |
 | `.env.example` propre | OK | racine du depot |
 
@@ -47,8 +47,8 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 |---|---|---|
 | Tests unitaires backend | OK | `api/tests/` |
 | Tests integration API + base | OK | `api/tests/conftest.py` + fixtures PostgreSQL |
-| Tests frontend / E2E | OK | tests frontend Node runner |
-| Commande claire | OK | `pytest`, `docker compose run --rm api pytest`, `cd frontend && npm test` |
+| Tests frontend / E2E | OK | tests frontend Node + E2E Playwright |
+| Commande claire | OK | `pytest`, `docker compose run --rm api pytest`, `cd frontend && npm test`, `npm run e2e` |
 
 ## 5. CI/CD
 
@@ -56,7 +56,7 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 |---|---|---|
 | GitHub Actions | OK | `.github/workflows/ci.yml` |
 | Installation dependances | OK | Python + Node |
-| Lancement tests | OK | `pytest` + `npm test` |
+| Lancement tests | OK | `pytest` + `npm test` + `npm run e2e` |
 | Qualite / validation compose | OK | `docker compose config` |
 | Build des images Docker | OK | `docker compose build api dashboard etl` |
 | Secrets non exposes | OK | variables d'environnement |
@@ -65,11 +65,11 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 
 | Exigence | Etat | Implementation |
 |---|---|---|
-| Disponibilite API | OK | Blackbox + Grafana |
-| Endpoint `/health` | OK | sonde dediee |
+| Disponibilite API | OK | Prometheus `up{job="obrail_api"}` + Grafana |
+| Endpoint `/health` | OK | metrique `obrail_api_healthy` + route dediee |
 | Latence | OK | Prometheus `http_request_duration_seconds` |
 | Taux d'erreurs | OK | `http_requests_total` par status |
-| Logs applicatifs | OK | fichier API + Promtail + Loki + panneau Grafana |
+| Logs applicatifs | OK | sortie standard Docker + `data/logs/api.log` |
 | Volumes de donnees | OK | jauges `obrail_total_*` |
 | Dashboard Grafana | OK | `monitoring/grafana/dashboards/obrail-overview.json` |
 
@@ -93,7 +93,7 @@ Ce document fait le lien entre le sujet MSPR, la grille EPSI et l'etat reel du d
 - l'accessibilite est traitee de facon pragmatique mais sans audit RGAA outille complet
 - Grafana conserve le mot de passe de son volume persistant apres premiere initialisation
 - la couverture historique `2015 -> aujourd'hui` depend encore des archives GTFS disponibles
-- les tests frontend sont unitaires, pas des E2E navigateur complets
+- les E2E frontend utilisent un jeu de donnees seedee dedie pour rester stables sans perdre la chaine complete frontend -> API -> base
 
 ## 9. Conclusion
 
@@ -105,7 +105,7 @@ Le depot repond maintenant au coeur du cahier des charges TPRE532 :
 - ETL integre a une architecture exploitable
 - tests automatises
 - CI/CD
-- supervision Prometheus, Grafana, Loki
+- supervision Prometheus et Grafana
 - documentation de production et de soutenance
 
 Les ecarts restants sont des pistes d'amelioration, pas des blocages pour la remise MSPR.

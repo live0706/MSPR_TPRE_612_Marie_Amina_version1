@@ -3,7 +3,7 @@
 ## Prerequis
 
 - Docker Desktop ou Docker Engine avec Compose v2
-- ports libres : `5432`, `8000`, `8501`, `9090`, `3000`, `3100`, `9115`
+- ports libres : `5432`, `8000`, `8501`, `9090`, `3000`
 
 ## Variables d'environnement
 
@@ -17,7 +17,7 @@ Variables principales :
 
 - `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DATABASE_URL`
 - `APP_ENV`, `APP_VERSION`, `LOG_LEVEL`
-- `ENABLE_PROMETHEUS`, `PROMETHEUS_URL`, `GRAFANA_URL`, `LOKI_URL`
+- `ENABLE_PROMETHEUS`, `PROMETHEUS_URL`, `GRAFANA_URL`
 - `APP_LOG_PATH`
 - `CORS_ORIGINS`
 
@@ -40,7 +40,6 @@ docker compose run --rm etl
 - Dashboard : `http://localhost:8501`
 - Prometheus : `http://localhost:9090`
 - Grafana : `http://localhost:3000`
-- Loki : `http://localhost:3100`
 
 ## Healthchecks
 

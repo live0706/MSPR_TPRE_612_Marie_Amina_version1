@@ -23,8 +23,8 @@ function formatDistance(value) {
 
 export default function JourneyTable({ journeys, selectedTripId, onSelectTrip }) {
   return (
-    <section className="table-panel">
-      <div className="table-panel__meta">
+    <section className="table-panel" data-testid="journey-table">
+      <div className="table-panel__meta" data-testid="journey-table-meta">
         {journeys.length} trajets affiches{selectedTripId ? " - 1 selection active" : ""}
       </div>
       <div className="table-shell" role="region" aria-label="Tableau des trajets">
@@ -44,7 +44,12 @@ export default function JourneyTable({ journeys, selectedTripId, onSelectTrip })
             {journeys.map((journey) => {
               const selected = journey.trip_id === selectedTripId;
               return (
-                <tr key={journey.trip_id} data-selected={selected}>
+                <tr
+                  key={journey.trip_id}
+                  data-selected={selected}
+                  data-testid="journey-row"
+                  data-trip-id={journey.trip_id}
+                >
                   <td>
                     <div className="table-operator">
                       <strong>{journey.operator_name || "Operateur inconnu"}</strong>
@@ -74,6 +79,7 @@ export default function JourneyTable({ journeys, selectedTripId, onSelectTrip })
                     <button
                       type="button"
                       className="table-button"
+                      data-testid={`journey-select-${journey.trip_id}`}
                       onClick={() => onSelectTrip(journey.trip_id)}
                     >
                       {selected ? "Selectionne" : "Voir"}

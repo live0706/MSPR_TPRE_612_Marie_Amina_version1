@@ -17,7 +17,7 @@
 - PostgreSQL
 - FastAPI
 - React + Leaflet
-- Prometheus / Grafana / Blackbox
+- Prometheus / Grafana
 
 ## Slide 4 - Evolutions backend
 
@@ -47,7 +47,7 @@
 ## Slide 8 - Monitoring
 
 - Prometheus
-- Blackbox Exporter
+- Prometheus
 - Grafana
 
 ## Slide 9 - Securite / RGPD / accessibilite
@@ -60,4 +60,4 @@
 
 - prototype transforme en socle deployable
 - plateforme demonstrable devant jury
-- pistes futures : auth, reverse proxy, centralisation logs
+- pistes futures : auth, reverse proxy, supervision avancee

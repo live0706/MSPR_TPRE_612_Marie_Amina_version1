@@ -8,7 +8,7 @@ ObRail Europe assemble :
 - une base PostgreSQL pour le stockage transactionnel et analytique
 - une API FastAPI pour exposer les trajets, les statistiques et l'etat de la plateforme
 - un frontend React cartographique pour la consultation metier
-- une pile d'observabilite avec Prometheus, Grafana, Loki, Promtail et Blackbox Exporter
+- une pile d'observabilite avec Prometheus et Grafana
 
 Ce depot est prevu pour etre lance en local avec Docker Compose, tout en restant exploitable service par service pour le developpement.
 
@@ -49,7 +49,7 @@ Le flux principal est le suivant :
 3. les tables PostgreSQL transactionnelles et analytiques sont alimentees
 4. FastAPI expose les trajets, volumes, metriques et informations de sante
 5. le frontend React consomme l'API pour afficher les trajets et la carte
-6. Prometheus, Grafana et Loki assurent la supervision
+6. Prometheus et Grafana assurent la supervision
 
 ## Fonctionnalites
 
@@ -81,11 +81,11 @@ Le flux principal est le suivant :
 
 ### Observabilite
 
-- disponibilite de l'API et du frontend
+- disponibilite de l'API
 - latence HTTP
 - taux d'erreur HTTP
 - metriques metier exposees en Prometheus
-- centralisation des logs API dans Loki
+- logs applicatifs disponibles via Docker et fichier local
 - dashboard Grafana provisionne automatiquement
 
 ## Architecture
@@ -97,12 +97,7 @@ flowchart LR
     C --> D[FastAPI]
     D --> E[Frontend React]
     D --> F[Prometheus]
-    H[Blackbox Exporter] --> F
-    H --> D
-    D --> I[Loki]
-    J[Promtail] --> I
     F --> G[Grafana]
-    I --> G
 ```
 
 ## Technologies
@@ -130,9 +125,6 @@ flowchart LR
 
 - Prometheus
 - Grafana
-- Loki
-- Promtail
-- Blackbox Exporter
 
 ### Industrialisation
 
@@ -149,8 +141,7 @@ flowchart LR
 |-- database/                    # schema SQL et initialisation PostgreSQL
 |-- etl/                         # pipeline batch d'extraction / transformation / chargement
 |-- frontend/                    # dashboard React actif
-|-- dashboard/                   # anciens scripts/dashboard legacy conserves
-|-- monitoring/                  # Prometheus / Grafana / Loki / Promtail / Blackbox
+|-- monitoring/                  # Prometheus / Grafana
 |-- data/                        # jeux bruts, fichiers transformes, logs
 |-- docs/                        # documentation technique et d'exploitation
 |-- .github/workflows/ci.yml     # pipeline GitHub Actions
@@ -173,8 +164,6 @@ flowchart LR
 - `8501` : frontend React
 - `9090` : Prometheus
 - `3000` : Grafana
-- `3100` : Loki
-- `9115` : Blackbox Exporter
 
 ### Pour le developpement local hors Docker
 
@@ -212,10 +201,9 @@ Variables principales :
 | `LOG_LEVEL` | niveau de log | `INFO` |
 | `ENABLE_PROMETHEUS` | active `/metrics` | `true` |
 | `APP_LOG_PATH` | chemin du log applicatif | `/app/data/logs/api.log` |
-| `CORS_ORIGINS` | origines autorisees | `http://localhost:8501,...` |
+| `CORS_ORIGINS` | origines autorisees | `http://localhost:8501,...,http://127.0.0.1:4173` |
 | `PROMETHEUS_URL` | URL publique Prometheus | `http://localhost:9090` |
 | `GRAFANA_URL` | URL publique Grafana | `http://localhost:3000` |
-| `LOKI_URL` | URL publique Loki | `http://localhost:3100` |
 | `GRAFANA_ADMIN_USER` | login Grafana | `admin` |
 | `GRAFANA_ADMIN_PASSWORD` | mot de passe Grafana | `admin` |
 | `TRANSITLAND_ENABLED` | active la prospection Transitland | `false` |
@@ -241,7 +229,6 @@ docker compose run --rm etl
 - Frontend : `http://localhost:8501`
 - Prometheus : `http://localhost:9090`
 - Grafana : `http://localhost:3000`
-- Loki : `http://localhost:3100`
 
 ### 4. Verifier l'etat du systeme
 
@@ -289,11 +276,8 @@ docker compose up -d --build api
 | `etl` | pipeline batch | - | execution a la demande |
 | `api` | FastAPI | `8000` | API principale |
 | `dashboard` | React + Nginx | `8501` | interface utilisateur active |
-| `prometheus` | metriques | `9090` | scrapes API + probes |
+| `prometheus` | metriques | `9090` | scrapes API et metriques metier |
 | `grafana` | dashboards | `3000` | visualisation |
-| `loki` | stockage des logs | `3100` | logs centralises |
-| `promtail` | collecte logs | - | lit `data/logs/api.log` |
-| `blackbox` | probes HTTP | `9115` | supervision des endpoints HTTP |
 
 ## API disponible
 
@@ -359,7 +343,7 @@ L'ETL :
 |---|---|
 | `data/raw/` | donnees brutes telechargees ou archives |
 | `data/processed/` | jeux transformes et rapports |
-| `data/logs/` | logs applicatifs API exploites par Promtail |
+| `data/logs/` | logs applicatifs API |
 
 ### Fichiers utiles generes
 
@@ -371,8 +355,7 @@ L'ETL :
 
 Le frontend actif est le dossier `frontend/`.
 
-Le service Docker `dashboard` pointe vers ce frontend React.  
-Le dossier `dashboard/` present dans le depot correspond a des elements legacy conserves pour reference et quelques tests utilitaires, mais il n'est pas le frontend servi en production locale.
+Le service Docker `dashboard` pointe vers ce frontend React.
 
 ### Lancer le frontend seul en local
 
@@ -391,6 +374,7 @@ Le frontend peut consommer une base API custom via :
 - `VITE_API_BASE_URL`
 
 Par defaut, les appels sont resolus sur la meme origine que l'interface servie.
+En developpement Vite pur sur `5173` ou `4173`, le frontend bascule automatiquement vers `http://127.0.0.1:8000` si `VITE_API_BASE_URL` n'est pas defini.
 
 ## Monitoring et observabilite
 
@@ -400,7 +384,7 @@ Prometheus collecte :
 
 - les metriques HTTP de FastAPI
 - les metriques metier `obrail_*`
-- les probes HTTP de l'API et du frontend via Blackbox
+- la disponibilite de l'API via la metrique `up`
 
 Metriques metier exposees :
 
@@ -417,7 +401,6 @@ Metriques metier exposees :
 Grafana est provisionne automatiquement avec :
 
 - la datasource Prometheus
-- la datasource Loki
 - le dashboard `ObRail Overview`
 
 Important :
@@ -425,17 +408,15 @@ Important :
 - si Grafana a deja ete initialise une premiere fois, le couple `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` de `.env` ne remplace pas forcement les identifiants deja stockes dans le volume persistant
 - en cas de doute, verifier le volume Grafana ou repartir d'un environnement vierge
 
-### Loki / Promtail
+### Logs applicatifs
 
 - l'API ecrit ses logs dans `data/logs/api.log`
-- Promtail lit ce fichier
-- Loki indexe ensuite ces logs pour Grafana
+- les journaux restent consultables via `docker compose logs`
 
 ### Endpoints utiles de supervision
 
 - `http://localhost:9090/-/healthy`
 - `http://localhost:9090/api/v1/targets`
-- `http://localhost:3100/ready`
 - `http://localhost:8000/metrics`
 - `http://localhost:8000/health`
 
@@ -460,13 +441,24 @@ docker compose run --rm api pytest -q
 ```bash
 cd frontend
 npm test
+npm run build
+npm run e2e
 ```
 
-### Build frontend
+### Tests E2E sur stack Docker
+
+```bash
+docker compose up -d db api dashboard
+psql -h localhost -U postgres -d obrail -f database/seed_e2e.sql
+cd frontend
+npm run e2e:stack
+```
+
+### Tests E2E visuels
 
 ```bash
 cd frontend
-npm run build
+npm run e2e:headed
 ```
 
 ## CI/CD
@@ -478,12 +470,16 @@ Le workflow GitHub Actions est disponible dans :
 Le pipeline :
 
 1. prepare Python et Node.js
-2. demarre un PostgreSQL ephemere
+2. demarre PostgreSQL
 3. initialise le schema SQL
 4. execute les tests backend
-5. execute les tests frontend
-6. verifie `docker compose config`
-7. construit les images Docker
+5. execute les tests frontend unitaires
+6. build le frontend React pour l'API reelle
+7. seed la base pour les scenarios Playwright
+8. demarre l'API reelle pour les E2E
+9. execute les tests E2E Playwright
+10. verifie `docker compose config`
+11. construit les images Docker et publie des artefacts testables
 
 ## Documentation complementaire
 
@@ -524,13 +520,12 @@ Verifier :
 - `http://localhost:9090/api/v1/targets`
 - la sante de l'API sur `/health`
 
-### Les logs n'apparaissent pas dans Grafana
+### Les logs applicatifs sont insuffisants
 
 Verifier :
 
 - la presence de `data/logs/api.log`
-- `docker compose logs promtail`
-- `http://localhost:3100/ready`
+- `docker compose logs api`
 
 ### Aucun trajet n'apparait apres le demarrage
 
@@ -561,8 +556,6 @@ docker compose logs -f dashboard
 docker compose logs -f etl
 docker compose logs -f prometheus
 docker compose logs -f grafana
-docker compose logs -f promtail
-docker compose logs -f loki
 ```
 
 ### Rebuild cible

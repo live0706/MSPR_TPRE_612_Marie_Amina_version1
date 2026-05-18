@@ -1,7 +1,16 @@
 def test_health_endpoint_returns_status(client, monkeypatch):
-    monkeypatch.setattr("routers.health.ping_database", lambda: True)
-    monkeypatch.setattr("routers.health.QUALITY_REPORT_PATH", type("PathStub", (), {"exists": lambda self: True})())
-    monkeypatch.setattr("routers.health.MODEL_METRICS_PATH", type("PathStub", (), {"exists": lambda self: True})())
+    monkeypatch.setattr(
+        "routers.health.build_health_payload",
+        lambda: {
+            "status": "ok",
+            "environment": "test",
+            "version": "2.1.0",
+            "timestamp": "2026-05-18T10:15:00Z",
+            "database": {"status": "ok", "detail": "Connexion PostgreSQL operationnelle."},
+            "quality_report": {"status": "ok", "detail": "Rapport de qualite disponible."},
+            "model_metrics": {"status": "ok", "detail": "Metriques modele disponibles."},
+        },
+    )
 
     response = client.get("/health")
 

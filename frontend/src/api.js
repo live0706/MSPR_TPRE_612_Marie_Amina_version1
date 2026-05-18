@@ -1,14 +1,36 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+function resolveApiBase() {
+  const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (configuredBase) {
+    return configuredBase;
+  }
 
-async function requestJson(path, params = {}) {
+  const { hostname, port } = window.location;
+  if (port === "4173" || port === "5173") {
+    const apiHost = hostname === "localhost" ? "127.0.0.1" : hostname;
+    return `http://${apiHost}:8000`;
+  }
+
+  return "";
+}
+
+const API_BASE = resolveApiBase();
+
+function buildUrl(path, params = {}) {
   const url = new URL(`${API_BASE}${path}`, window.location.origin);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, value);
     }
   });
+  return url;
+}
 
-  const response = await fetch(url.toString(), {
+export function getApiPublicUrl(path = "") {
+  return buildUrl(path).toString();
+}
+
+async function requestJson(path, params = {}) {
+  const response = await fetch(buildUrl(path, params).toString(), {
     headers: {
       Accept: "application/json"
     }

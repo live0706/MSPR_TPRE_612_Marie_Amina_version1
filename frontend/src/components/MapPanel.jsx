@@ -98,7 +98,11 @@ export default function MapPanel({ journeys, selectedTripId, selectedJourney, on
 
   if (!mappableJourneys.length) {
     return (
-      <section className="map-panel map-panel--empty" aria-live="polite">
+      <section
+        className="map-panel map-panel--empty"
+        aria-live="polite"
+        data-testid="journey-map-panel-empty"
+      >
         <div>
           <h2>Aucun trajet cartographiable</h2>
           <p>
@@ -111,9 +115,9 @@ export default function MapPanel({ journeys, selectedTripId, selectedJourney, on
   }
 
   return (
-    <section className="map-panel">
+    <section className="map-panel" data-testid="journey-map-panel">
       <div className="map-toolbar">
-        <div className="map-legend" aria-label="Legende de la carte">
+        <div className="map-legend" aria-label="Legende de la carte" data-testid="map-legend">
           <span>
             <i className="legend-dot legend-dot--night" />
             Nuit
@@ -128,7 +132,7 @@ export default function MapPanel({ journeys, selectedTripId, selectedJourney, on
           </span>
         </div>
 
-        <div className="map-stats" aria-label="Resume de la carte">
+        <div className="map-stats" aria-label="Resume de la carte" data-testid="map-stats">
           <span className="map-chip">{mappableJourneys.length} routes visibles</span>
           <span className="map-chip">{uniqueOperators.size} operateurs</span>
           <span className="map-chip">{selectedJourney ? "1 route active" : "Clique sur une ligne"}</span>
@@ -136,12 +140,13 @@ export default function MapPanel({ journeys, selectedTripId, selectedJourney, on
       </div>
 
       {corridorHighlights.length ? (
-        <div className="route-pills" aria-label="Corridors visibles">
+        <div className="route-pills" aria-label="Corridors visibles" data-testid="route-pills">
           {corridorHighlights.map((corridor) => (
             <button
               key={corridor.key}
               type="button"
               className={`route-pill ${corridor.tripId === selectedTripId ? "route-pill--active" : ""}`}
+              data-testid={`route-pill-${corridor.tripId}`}
               onClick={() => onSelectTrip(corridor.tripId)}
             >
               <strong>{corridor.label}</strong>

@@ -19,7 +19,7 @@
 
 ## 2. Resume executif
 
-ObRail Europe est une solution de data engineering et de restitution analytique autour des trajets ferroviaires europeens. Le projet repose sur un ETL Python qui collecte et transforme des donnees GTFS et CSV, une base PostgreSQL qui stocke les couches transactionnelle et analytique, une API FastAPI qui expose les trajets et les statistiques, un frontend React cartographique pour la consultation metier, et une couche d'observabilite avec Prometheus, Blackbox Exporter, Loki, Promtail et Grafana.
+ObRail Europe est une solution de data engineering et de restitution analytique autour des trajets ferroviaires europeens. Le projet repose sur un ETL Python qui collecte et transforme des donnees GTFS et CSV, une base PostgreSQL qui stocke les couches transactionnelle et analytique, une API FastAPI qui expose les trajets et les statistiques, un frontend React cartographique pour la consultation metier, et une couche d'observabilite avec Prometheus et Grafana.
 
 L'objectif de cette MSPR etait de transformer un prototype technique en solution plus industrialisee, testee, documentee, conteneurisee et exploitable en environnement de soutenance ou de pre-production. Les travaux ont porte sur la fiabilisation de l'ETL, la normalisation des endpoints API, l'ajout de tests automatises, la mise en place d'une CI GitHub Actions, la supervision applicative et la redaction d'une documentation d'exploitation.
 
@@ -128,12 +128,7 @@ flowchart LR
     C --> D[FastAPI]
     D --> E[Frontend React]
     D --> F[Prometheus]
-    D --> I[Loki]
-    J[Promtail] --> I
-    H[Blackbox Exporter] --> F
-    H --> D
     F --> G[Grafana]
-    I --> G
 ```
 
 ### 6.2 Raison des choix techniques
@@ -142,7 +137,7 @@ flowchart LR
 - **FastAPI** : excellent compromis entre rapidite de developpement, validation et documentation OpenAPI
 - **PostgreSQL** : robuste pour une couche transactionnelle et analytique simple
 - **React + Leaflet** : choix plus presentable pour une soutenance, avec carte interactive, filtres riches et meilleure projection produit
-- **Prometheus + Grafana + Loki** : standard pragmatique pour superviser les metriques techniques et centraliser les logs applicatifs
+- **Prometheus + Grafana** : standard pragmatique pour superviser les metriques techniques et metier sans surcharger la stack
 - **Docker Compose** : suffisant pour un environnement local ou de demo
 
 ---
@@ -160,10 +155,6 @@ flowchart LR
 |   |-- routers/
 |   |-- schemas/
 |   `-- tests/
-|-- dashboard/
-|   |-- app.py
-|   |-- utils.py
-|   `-- tests/
 |-- frontend/
 |   |-- src/
 |   `-- tests/
@@ -172,7 +163,6 @@ flowchart LR
 |-- monitoring/
 |   |-- prometheus/
 |   |-- grafana/
-|   `-- blackbox/
 |-- docs/
 |-- .github/workflows/ci.yml
 |-- docker-compose.yml
@@ -264,9 +254,6 @@ Le `docker-compose.yml` a ete industrialise pour exposer une vraie stack complet
 - `dashboard`
 - `prometheus`
 - `grafana`
-- `blackbox`
-- `loki`
-- `promtail`
 
 Des `healthchecks` ont ete ajoutes pour les services critiques.
 
@@ -280,7 +267,8 @@ docker compose up -d --build
 
 Une base de tests automatises a ete ajoutee :
 
-- tests unitaires frontend sur les helpers du dashboard legacy et sur les helpers React
+- tests unitaires frontend sur les helpers React
+- tests E2E navigateur Playwright sur le dashboard React
 - tests API sur `health`, `trajets`, `stats/volumes`, `monitoring`
 - tests d'integration avec PostgreSQL reel et jeu de donnees de test injecte
 
@@ -291,8 +279,8 @@ Fichiers principaux :
 - `api/tests/test_health.py`
 - `api/tests/test_trajets.py`
 - `api/tests/test_stats.py`
-- `dashboard/tests/test_utils.py`
 - `frontend/tests/utils.test.js`
+- `frontend/tests/e2e/dashboard.spec.js`
 
 ## 8.6 CI/CD
 
@@ -304,34 +292,35 @@ Etapes principales :
 
 1. checkout
 2. installation Python
-3. lancement d'un service PostgreSQL ephemere
+3. lancement de PostgreSQL
 4. installation des dependances
-5. initialisation du schema SQL
-6. execution de `pytest`
-7. validation de `docker compose config`
-8. build des images Docker
+5. installation du navigateur Chromium pour Playwright
+6. initialisation du schema SQL
+7. execution de `pytest`
+8. build du frontend React pour l'API reelle
+9. seed de la base pour les scenarios Playwright
+10. demarrage de l'API reelle
+11. execution des tests frontend unitaires puis E2E
+12. validation de `docker compose config`
+13. build des images Docker et publication d'artefacts
 
 ## 8.7 Monitoring et observabilite
 
 La supervision repose sur :
 
-- **Prometheus** pour la collecte
-- **Blackbox Exporter** pour les probes HTTP
-- **Loki** pour le stockage des logs
-- **Promtail** pour l'expedition des logs applicatifs
+- **Prometheus** pour la collecte des metriques techniques et metier
 - **Grafana** pour la visualisation
 
 Indicateurs suivis :
 
 - disponibilite de l'API
-- disponibilite de `/health`
+- disponibilite de `/health` via `obrail_api_healthy`
 - latence API
 - taux d'erreurs HTTP
 - debit de requetes
-- disponibilite du frontend
 - volumetrie metier exposee en metriques Prometheus
 - fraicheur de la derniere ingestion
-- consultation des logs applicatifs depuis Grafana
+- consultation des logs applicatifs via Docker et fichier local
 
 ---
 
@@ -439,7 +428,6 @@ Strategie simple :
 Malgre les ameliorations, certaines limites subsistent :
 
 - les vraies archives 2015 -> aujourd'hui dependent encore de la disponibilite des sources historiques
-- les tests E2E navigateur ne sont pas encore en place
 - l'authentification n'est pas encore implementee
 
 ---
@@ -449,9 +437,8 @@ Malgre les ameliorations, certaines limites subsistent :
 - ajouter une authentification simple
 - ajouter un reverse proxy Nginx ou Traefik
 - brancher un stockage d'archives GTFS plus riche
-- ajouter des tests E2E Playwright
 - ajouter un lint / format check dans la CI
-- completer l'alerting Grafana et la retention long terme des logs
+- completer l'alerting Grafana
 
 ---
 
@@ -476,7 +463,7 @@ Apres push du projet et execution locale, il sera utile d'ajouter :
 
 Cette MSPR a permis de faire evoluer ObRail Europe d'un prototype fonctionnel vers un socle bien plus industrialise. Le projet dispose maintenant d'une architecture plus claire, d'une API mieux cadre, d'une base de tests, d'un pipeline CI, d'une supervision technique et d'une documentation d'exploitation.
 
-Le choix d'une solution pragmatique basee sur FastAPI, PostgreSQL, React, Docker Compose, Prometheus, Grafana et Loki permet de presenter une plateforme coherente, demonstrable et defendable devant un jury EPSI, tout en conservant des axes d'amelioration realistes pour une phase ulterieure.
+Le choix d'une solution pragmatique basee sur FastAPI, PostgreSQL, React, Docker Compose, Prometheus et Grafana permet de presenter une plateforme coherente, demonstrable et defendable devant un jury EPSI, tout en conservant des axes d'amelioration realistes pour une phase ulterieure.
 
 ---
 
