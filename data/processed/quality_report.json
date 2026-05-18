@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-16T19:47:43.341212Z",
-  "total_rows": 145029,
+  "generated_at": "2026-05-18T19:22:29.115518Z",
+  "total_rows": 144244,
   "duplicate_trip_ids": 0,
   "distinct_operators": 51,
   "distinct_countries": 19,
@@ -22,10 +22,10 @@
     "co2_emissions": 0,
     "source_origin": 0,
     "source_name": 0,
-    "source_provider": 145029,
+    "source_provider": 144244,
     "source_country": 0,
-    "origin_country": 145029,
-    "destination_country": 145029,
+    "origin_country": 144244,
+    "destination_country": 144244,
     "country": 0
   },
   "missing_rate_by_column": {
@@ -52,12 +52,12 @@
     "country": 0.0
   },
   "service_type_counts": {
-    "Jour": 121882,
-    "Nuit": 23147
+    "Jour": 121128,
+    "Nuit": 23116
   },
   "co2_zero_or_missing": 0,
   "top_countries": {
-    "FR": 106682,
+    "FR": 105897,
     "AT": 35463,
     "DE": 2601,
     "UA": 101,
@@ -69,10 +69,10 @@
     "TR": 14
   },
   "top_operators": {
-    "SNCF VOYAGEURS": 105807,
+    "SNCF VOYAGEURS": 104962,
     "OEBB Personenverkehr AG Kundenservice": 35449,
     "\u00d6BB": 989,
-    "OCEdefault": 857,
+    "OCEdefault": 917,
     "SNCF": 449,
     "WESTbahn": 368,
     "Flixtrain": 296,
@@ -81,7 +81,7 @@
     "DB Fernverkehr (Codesharing)": 74
   },
   "top_sources": {
-    "sncf_voyageurs_national": 106664,
+    "sncf_voyageurs_national": 105879,
     "oebb_austria_full": 35449,
     "db_germany_full": 2579,
     "back_on_track_trip_export": 337

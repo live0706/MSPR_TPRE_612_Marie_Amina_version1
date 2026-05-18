@@ -1,28 +1,28 @@
 {
-  "generated_at": "2026-05-16T19:47:43.467466Z",
+  "generated_at": "2026-05-18T19:22:29.307184Z",
   "model": "linear_regression_numpy",
   "features": [
     "distance_km"
   ],
   "target": "co2_emissions",
   "coefficients": {
-    "a": 0.0020000301330350156,
-    "b": -1.6966318127209468e-05
+    "a": 0.0020000295980896862,
+    "b": -1.665415263688572e-05
   },
   "metrics": {
-    "mae": 2.209403629748039e-05,
-    "rmse": 2.655938717788923e-05,
-    "r2": 0.9999999916221405
+    "mae": 2.211773366015448e-05,
+    "rmse": 2.6543441047908996e-05,
+    "r2": 0.9999999915797025
   },
-  "data_points": 145029,
+  "data_points": 144244,
   "coverage": {
-    "rows": 145029,
+    "rows": 144244,
     "operators": 51,
     "countries": 19,
     "sources": 4
   },
   "top_countries": {
-    "FR": 106682,
+    "FR": 105897,
     "AT": 35463,
     "DE": 2601,
     "UA": 101,
@@ -34,10 +34,10 @@
     "TR": 14
   },
   "top_operators": {
-    "SNCF VOYAGEURS": 105807,
+    "SNCF VOYAGEURS": 104962,
     "OEBB Personenverkehr AG Kundenservice": 35449,
     "\u00d6BB": 989,
-    "OCEdefault": 857,
+    "OCEdefault": 917,
     "SNCF": 449,
     "WESTbahn": 368,
     "Flixtrain": 296,
