@@ -9,6 +9,7 @@ tests/tmp_runs/
 tests/__pycache__/
 py_mkdir_test/
 tmp_test/
-data/raw
-data/processed
+data/raw/
+data/processed/
+data/processed/*
 data/logs/
