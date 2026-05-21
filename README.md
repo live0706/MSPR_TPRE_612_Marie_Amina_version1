@@ -216,6 +216,12 @@ Variables principales :
 docker compose up -d --build
 ```
 
+### Variante depuis les images publiees
+
+```bash
+docker compose -f docker-compose.release.yml up -d
+```
+
 ### 2. Charger les donnees
 
 ```bash
@@ -463,11 +469,14 @@ npm run e2e:headed
 
 ## CI/CD
 
-Le workflow GitHub Actions est disponible dans :
+Les workflows GitHub Actions sont disponibles dans :
 
 - `.github/workflows/ci.yml`
+- `.github/workflows/cd.yml`
 
-Le pipeline :
+### CI
+
+Le workflow `CI` :
 
 1. prepare Python et Node.js
 2. demarre PostgreSQL
@@ -481,6 +490,15 @@ Le pipeline :
 10. verifie `docker compose config`
 11. construit les images Docker et publie des artefacts testables
 
+### CD
+
+Le workflow `CD` :
+
+1. se declenche apres succes de la CI sur `main`
+2. publie les images `api`, `dashboard` et `etl` dans `GHCR`
+3. ajoute les tags `latest` et `sha-<commit>`
+4. publie un `deployment-bundle` avec `docker-compose.release.yml`
+
 ## Documentation complementaire
 
 - [Architecture](docs/architecture.md)
@@ -488,6 +506,7 @@ Le pipeline :
 - [Tests](docs/tests.md)
 - [CI/CD](docs/cicd.md)
 - [Monitoring](docs/monitoring.md)
+- [Guide de presentation jury](docs/guide_presentation_jury.md)
 - [Conformite MSPR](docs/conformite_mspr_tpre532.md)
 - [RGPD, accessibilite, securite](docs/rgpd_accessibilite_securite.md)
 - [Maintenance et rollback](docs/maintenance_rollback.md)

@@ -1,0 +1,131 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-images:
+    name: Publish Docker images
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - name: Resolve release context
+        id: context
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_SHA="${GITHUB_SHA}"
+            TARGET_BRANCH="${GITHUB_REF_NAME}"
+          else
+            TARGET_SHA="${{ github.event.workflow_run.head_sha }}"
+            TARGET_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          fi
+
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          SHORT_SHA="${TARGET_SHA::7}"
+
+          echo "target_sha=${TARGET_SHA}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "owner_lc=${OWNER_LC}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "api_image=ghcr.io/${OWNER_LC}/obrail-api" >> "$GITHUB_OUTPUT"
+          echo "dashboard_image=ghcr.io/${OWNER_LC}/obrail-dashboard" >> "$GITHUB_OUTPUT"
+          echo "etl_image=ghcr.io/${OWNER_LC}/obrail-etl" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.context.outputs.target_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ steps.context.outputs.api_image }}:latest
+            ${{ steps.context.outputs.api_image }}:sha-${{ steps.context.outputs.short_sha }}
+
+      - name: Build and publish dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ steps.context.outputs.dashboard_image }}:latest
+            ${{ steps.context.outputs.dashboard_image }}:sha-${{ steps.context.outputs.short_sha }}
+
+      - name: Build and publish ETL image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./etl
+          push: true
+          tags: |
+            ${{ steps.context.outputs.etl_image }}:latest
+            ${{ steps.context.outputs.etl_image }}:sha-${{ steps.context.outputs.short_sha }}
+
+      - name: Build deployment manifest
+        shell: bash
+        run: |
+          mkdir -p release-bundle
+
+          cat <<EOF > release-bundle/release-manifest.md
+          # ObRail Europe - Deployment Manifest
+
+          Branch source: ${{ steps.context.outputs.target_branch }}
+          Commit source: ${{ steps.context.outputs.target_sha }}
+          Tag d'image: sha-${{ steps.context.outputs.short_sha }}
+
+          Images publiees:
+
+          - ${{ steps.context.outputs.api_image }}:latest
+          - ${{ steps.context.outputs.api_image }}:sha-${{ steps.context.outputs.short_sha }}
+          - ${{ steps.context.outputs.dashboard_image }}:latest
+          - ${{ steps.context.outputs.dashboard_image }}:sha-${{ steps.context.outputs.short_sha }}
+          - ${{ steps.context.outputs.etl_image }}:latest
+          - ${{ steps.context.outputs.etl_image }}:sha-${{ steps.context.outputs.short_sha }}
+
+          Deploiement recommande:
+
+          1. Copier .env.example vers .env
+          2. Ajuster GHCR_OWNER et IMAGE_TAG si necessaire
+          3. Lancer:
+
+             docker compose -f docker-compose.release.yml up -d
+             docker compose -f docker-compose.release.yml run --rm etl
+          EOF
+
+          cp docker-compose.release.yml release-bundle/
+          cp .env.example release-bundle/
+          cp README.md release-bundle/
+          cp docs/deploiement.md release-bundle/
+          cp docs/cicd.md release-bundle/
+
+      - name: Upload deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-bundle
+          path: release-bundle
+          if-no-files-found: error
