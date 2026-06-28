@@ -11,4 +11,10 @@ py_mkdir_test/
 tmp_test/
 data/raw/
 data/logs/
-docs
+docs/*
+!docs/tpre622_benchmark_ia.md
+!docs/tpre622_checklist_livrables.md
+!docs/tpre622_rapport_final_jury.md
+!docs/tpre622_rapport_technique.md
+!docs/tpre622_soutenance_plan.md
+!docs/tpre622_veille.md

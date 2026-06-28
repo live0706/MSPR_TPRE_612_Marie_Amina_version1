@@ -11,7 +11,7 @@ from database import dispose_engine, init_engine
 from errors import register_exception_handlers
 from logging_config import configure_logging
 from metrics import register_business_metrics
-from routers import analysis, countries, dashboard, metadata, operators, statistics, trains
+from routers import analysis, countries, dashboard, metadata, operators, prediction, statistics, trains
 from routers.health import router as health_router
 from routers.journeys import router as journeys_router
 from routers.monitoring import router as monitoring_router
@@ -102,6 +102,7 @@ app.include_router(statistics.router)
 app.include_router(analysis.router)
 app.include_router(operators.router)
 app.include_router(metadata.router)
+app.include_router(prediction.router)
 app.include_router(legacy_router)
 
 if ENABLE_PROMETHEUS and Instrumentator is not None:

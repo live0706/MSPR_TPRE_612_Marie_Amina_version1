@@ -1,0 +1,6 @@
+model,mae,rmse,r2,best_params
+linear_regression,2.1570775165986906e-05,2.5964515803597544e-05,0.9999999919625682,{}
+ridge,2.1574275204970392e-05,2.5964845827042064e-05,0.9999999919623639,{'model__alpha': 0.01}
+mlp,0.0009977912819214571,0.0013539721064364967,0.9999781437183227,"{'model__learning_rate_init': 0.001, 'model__hidden_layer_sizes': (64, 32), 'model__alpha': 0.01}"
+random_forest,4.70954507716918e-05,0.0039031249157516,0.9998183724412592,"{'model__n_estimators': 150, 'model__min_samples_leaf': 3, 'model__max_depth': None}"
+hist_gradient_boosting,0.0010918391198097778,0.010269896981734566,0.9987425549412795,"{'model__max_leaf_nodes': 31, 'model__max_iter': 200, 'model__learning_rate': 0.05}"

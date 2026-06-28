@@ -31,6 +31,7 @@ Ce depot est prevu pour etre lance en local avec Docker Compose, tout en restant
 - [Tests](#tests)
 - [CI/CD](#cicd)
 - [Documentation complementaire](#documentation-complementaire)
+- [MSPR TPRE622 - IA CO2](#mspr-tpre622---ia-co2)
 - [Depannage](#depannage)
 - [Commandes utiles](#commandes-utiles)
 
@@ -296,6 +297,7 @@ docker compose up -d --build api
 | `GET` | `/trajets/{trip_id}` | detail d'un trajet |
 | `GET` | `/stats/volumes` | volumes par pays et annee |
 | `GET` | `/metrics` | metriques Prometheus |
+| `POST` | `/predict` | prediction des emissions CO2 d'un trajet ferroviaire |
 | `GET` | `/api/docs` | documentation Swagger |
 
 ### Endpoints utiles au frontend
@@ -512,6 +514,30 @@ Le workflow `CD` :
 - [Maintenance et rollback](docs/maintenance_rollback.md)
 - [Plan de soutenance](docs/soutenance_plan.md)
 - [Trame de rapport](docs/rapport_mspr_tpre532.md)
+
+## MSPR TPRE622 - IA CO2
+
+Le dernier sujet ajoute un sous-projet Machine Learning dedie a la prediction des emissions CO2 ferroviaires.
+
+Livrables principaux :
+
+- [Rapport technique TPRE622](docs/tpre622_rapport_technique.md)
+- [Benchmark IA](docs/tpre622_benchmark_ia.md)
+- [Veille IA, reglementaire et ethique](docs/tpre622_veille.md)
+- [Rapport final jury TPRE622](docs/tpre622_rapport_final_jury.md)
+- [Checklist livrables TPRE622](docs/tpre622_checklist_livrables.md)
+- [Plan de soutenance TPRE622](docs/tpre622_soutenance_plan.md)
+- [Notebook EDA](notebooks/01_eda_modelisation_co2.ipynb)
+- [Sous-projet ML](ml/README.md)
+
+Commandes :
+
+```powershell
+python -m pip install -r requirements.txt
+python ml/train.py --dataset data/processed/trips_cleaned_final.csv
+python ml/predict.py --input-json ml/sample_prediction.json
+pytest -q
+```
 
 ## Depannage
 

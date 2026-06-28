@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-06-28T16:46:47.609126+00:00",
+  "dataset_path": "data\\processed\\trips_cleaned_final.csv",
+  "rows_used": 143679,
+  "features": {
+    "numeric": [
+      "distance_km",
+      "origin_lat",
+      "origin_lon",
+      "destination_lat",
+      "destination_lon",
+      "duration_hours",
+      "departure_hour",
+      "departure_month",
+      "departure_dayofweek"
+    ],
+    "categorical": [
+      "operator_name",
+      "service_type",
+      "train_type",
+      "country",
+      "source_origin"
+    ]
+  },
+  "target": "co2_emissions",
+  "best_model": "linear_regression",
+  "model_path": "ml\\models\\co2_emissions_model.joblib",
+  "serving_model_path": "data\\processed\\co2_emissions_model.joblib",
+  "validation_metrics": [
+    {
+      "model": "linear_regression",
+      "mae": 2.1570775165986906e-05,
+      "rmse": 2.5964515803597544e-05,
+      "r2": 0.9999999919625682,
+      "best_params": {}
+    },
+    {
+      "model": "ridge",
+      "mae": 2.1574275204970392e-05,
+      "rmse": 2.5964845827042064e-05,
+      "r2": 0.9999999919623639,
+      "best_params": {
+        "model__alpha": 0.01
+      }
+    },
+    {
+      "model": "random_forest",
+      "mae": 4.70954507716918e-05,
+      "rmse": 0.0039031249157516,
+      "r2": 0.9998183724412592,
+      "best_params": {
+        "model__n_estimators": 150,
+        "model__min_samples_leaf": 3,
+        "model__max_depth": null
+      }
+    },
+    {
+      "model": "hist_gradient_boosting",
+      "mae": 0.0010918391198097778,
+      "rmse": 0.010269896981734566,
+      "r2": 0.9987425549412795,
+      "best_params": {
+        "model__max_leaf_nodes": 31,
+        "model__max_iter": 200,
+        "model__learning_rate": 0.05
+      }
+    },
+    {
+      "model": "mlp",
+      "mae": 0.0009977912819214571,
+      "rmse": 0.0013539721064364967,
+      "r2": 0.9999781437183227,
+      "best_params": {
+        "model__learning_rate_init": 0.001,
+        "model__hidden_layer_sizes": [
+          64,
+          32
+        ],
+        "model__alpha": 0.01
+      }
+    }
+  ],
+  "test_metrics": {
+    "model": "linear_regression",
+    "mae": 2.140372145236143e-05,
+    "rmse": 2.5843705061773488e-05,
+    "r2": 0.9999999920570426
+  }
+}

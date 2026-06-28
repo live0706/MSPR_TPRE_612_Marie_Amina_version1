@@ -1,0 +1,12 @@
+{
+  "distance_km": 604.0,
+  "operator_name": "SNCF",
+  "service_type": "Nuit",
+  "train_type": "Rail",
+  "country": "FR",
+  "departure_time": "2026-12-01T19:30:00",
+  "origin_lat": 48.8566,
+  "origin_lon": 2.3522,
+  "destination_lat": 45.764,
+  "destination_lon": 4.8357
+}
